@@ -81,6 +81,7 @@ class CompetitionState(BaseModel):
     jugadors: Dict[str, PlayerState]
     data_creacio: str
     ultima_activitat: str
+    game_id: Optional[int] = None  # ID del joc associat (si existeix)
 
 class CreateCompetitionRequest(BaseModel):
     nom_creador: str
@@ -90,6 +91,7 @@ class CreateCompetitionRequest(BaseModel):
 class CreateCompetitionResponse(BaseModel):
     comp_id: str
     rebuscada: str
+    game_id: Optional[int] = None
 
 class JoinCompetitionRequest(BaseModel):
     nom_jugador: str
@@ -99,6 +101,7 @@ class JoinCompetitionResponse(BaseModel):
     comp_id: str
     rebuscada: str
     nom_jugador: str
+    game_id: Optional[int] = None
 
 # Configurar logging
 logging.basicConfig(
@@ -262,6 +265,21 @@ def validar_joc_disponible(rebuscada: str):
     except Exception as e:
         logger.warning(f"Error validant disponibilitat del joc '{rebuscada}': {str(e)}")
         # En cas d'error, permetre el joc
+
+def obtenir_game_id(rebuscada: str) -> Optional[int]:
+    """Retorna l'ID del joc per una paraula rebuscada si existeix en games.json"""
+    games_path = Path("data/games.json")
+    if not games_path.exists():
+        return None
+    try:
+        with open(games_path, encoding="utf-8") as f:
+            data = json.load(f)
+        for game in data.get("games", []):
+            if game.get("name", "").lower() == rebuscada.lower():
+                return game.get("id")
+    except Exception as e:
+        logger.warning(f"No s'ha pogut obtenir game_id per '{rebuscada}': {e}")
+    return None
 
 def obtenir_ranking_actiu(rebuscada_request: Optional[str] = None, es_personalitzada: bool = False):
     """Obté el rànquing actiu, sigui el global o el especificat"""
@@ -748,7 +766,8 @@ async def create_competition(request: CreateCompetitionRequest):
             creador=request.nom_creador,
             jugadors={request.nom_creador: player_state},
             data_creacio=now,
-            ultima_activitat=now
+            ultima_activitat=now,
+            game_id=obtenir_game_id(rebuscada)
         )
         
         competitions[comp_id] = competition
@@ -758,7 +777,8 @@ async def create_competition(request: CreateCompetitionRequest):
         
         return CreateCompetitionResponse(
             comp_id=comp_id,
-            rebuscada=rebuscada
+            rebuscada=rebuscada,
+            game_id=competition.game_id
         )
     except HTTPException:
         raise
@@ -812,7 +832,8 @@ async def join_competition(comp_id: str, request: JoinCompetitionRequest):
     return JoinCompetitionResponse(
         comp_id=comp_id,
         rebuscada=competition.rebuscada,
-        nom_jugador=request.nom_jugador
+        nom_jugador=request.nom_jugador,
+        game_id=competition.game_id
     )
 
 @app.get("/competition/{comp_id}", response_model=CompetitionState)

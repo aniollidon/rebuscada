@@ -287,6 +287,9 @@ function renderApp() {
                 </button>
                 <small id="clearCacheStatus" class="text-muted" style="display:none;">Netejant…</small>
               </div>
+              <div class="form-text mt-1">
+                Buida les entrades cachejades dels rànquings carregats (LRU). Fes-ho si has modificat els ranquings <code>*.json</code>. No afecta partides en curs; simplement obliga a reobrir els fitxers quan es demanin de nou.
+              </div>
             </div>
             <div class="modal-footer">
               <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tanca</button>
