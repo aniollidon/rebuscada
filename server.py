@@ -135,6 +135,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Secret compartit per operacions internes d'administració entre serveis
+ADMIN_SHARED_SECRET = os.getenv("ADMIN_SHARED_SECRET", "")
+
 # Carregar diccionari
 DICCIONARI_PATH = os.getenv("DICCIONARI_PATH", "data/diccionari.json")
 DEFAULT_REBUSCADA = os.getenv("DEFAULT_REBUSCADA", "paraula")
@@ -273,6 +276,79 @@ def obtenir_ranking_actiu(rebuscada_request: Optional[str] = None, es_personalit
     except Exception as e:
         logger.error(f"Error carregant el rànquing per la paraula '{rebuscada}': {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/internal/cache/clear")
+async def internal_cache_clear(request: Request):
+    """Endpoint intern per netejar la memòria cau LRU.
+
+    Requereix el header 'X-Admin-Token' que ha de coincidir amb ADMIN_SHARED_SECRET.
+    """
+    token = request.headers.get("x-admin-token") or request.headers.get("X-Admin-Token")
+    if not ADMIN_SHARED_SECRET:
+        logger.warning("/internal/cache/clear rebut però ADMIN_SHARED_SECRET no està configurat")
+        raise HTTPException(status_code=503, detail="Configuració d'administració no disponible")
+    if not token or token != ADMIN_SHARED_SECRET:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    caches_info = []
+    total_before = 0
+    total_after = 0
+
+    try:
+        # Llista de funcions cachejades a netejar
+        lru_funcs = [
+            ("carregar_ranking", carregar_ranking),
+        ]
+
+        for name, func in lru_funcs:
+            try:
+                info_before = func.cache_info()
+                before_curr = getattr(info_before, "currsize", 0)
+            except Exception:
+                info_before = None
+                before_curr = 0
+
+            try:
+                func.cache_clear()
+            except Exception as e:
+                logger.error(f"Error netejant cache per {name}: {e}")
+
+            try:
+                info_after = func.cache_info()
+                after_curr = getattr(info_after, "currsize", 0)
+            except Exception:
+                info_after = None
+                after_curr = 0
+
+            total_before += before_curr
+            total_after += after_curr
+
+            caches_info.append({
+                "name": name,
+                "before": {
+                    "hits": getattr(info_before, "hits", 0) if info_before else 0,
+                    "misses": getattr(info_before, "misses", 0) if info_before else 0,
+                    "maxsize": getattr(info_before, "maxsize", None) if info_before else None,
+                    "currsize": before_curr,
+                },
+                "after": {
+                    "hits": getattr(info_after, "hits", 0) if info_after else 0,
+                    "misses": getattr(info_after, "misses", 0) if info_after else 0,
+                    "maxsize": getattr(info_after, "maxsize", None) if info_after else None,
+                    "currsize": after_curr,
+                },
+            })
+
+        logger.info(f"ADMIN: Cache netejada (total abans={total_before}, després={total_after})")
+        return {
+            "ok": True,
+            "cleared": total_before,
+            "remaining": total_after,
+            "caches": caches_info,
+        }
+    except Exception as e:
+        logger.error(f"Error intern en netejar la cache: {e}")
+        raise HTTPException(status_code=500, detail="Error intern en netejar la memòria cau")
 
 @app.post("/guess", response_model=GuessResponse)
 async def guess(request: GuessRequest):

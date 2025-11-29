@@ -204,6 +204,16 @@ ADMIN_PORT = int(os.getenv("ADMIN_PORT", 5001))
 
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
 
+# Config per comunicar amb el servidor principal
+ADMIN_SHARED_SECRET = os.getenv("ADMIN_SHARED_SECRET", "")
+# Si CORE_SERVER_URL no està definit, dedueix-lo com http://127.0.0.1:PORT
+_core_url_env = os.getenv("CORE_SERVER_URL", "").strip()
+if _core_url_env:
+    CORE_SERVER_URL = _core_url_env
+else:
+    _port = os.getenv("PORT", "8000").strip()
+    CORE_SERVER_URL = f"http://127.0.0.1:{_port}"
+
 app = FastAPI()
 
 app.add_middleware(
@@ -260,6 +270,35 @@ def require_auth(request: Request):
     header = request.headers.get("x-admin-token")
     if not header or header != ADMIN_PASSWORD:
         raise HTTPException(status_code=401, detail="Unauthorized")
+
+@app.post("/api/cache/clear")
+def clear_core_cache(_: None = Depends(require_auth)):
+    """Proxy d'administració per netejar la memòria cau del servidor principal."""
+    if not CORE_SERVER_URL:
+        raise HTTPException(status_code=503, detail="CORE_SERVER_URL no configurat")
+    if not ADMIN_SHARED_SECRET:
+        raise HTTPException(status_code=503, detail="ADMIN_SHARED_SECRET no configurat")
+    try:
+        url = CORE_SERVER_URL.rstrip("/") + "/internal/cache/clear"
+        resp = requests.post(url, headers={"X-Admin-Token": ADMIN_SHARED_SECRET}, timeout=5)
+        if resp.status_code >= 400:
+            # Intenta propagar el missatge d'error del core
+            try:
+                data = resp.json()
+                detail = data.get("detail") if isinstance(data, dict) else None
+            except Exception:
+                detail = None
+            raise HTTPException(status_code=resp.status_code, detail=detail or "Error del servidor principal")
+        try:
+            return resp.json()
+        except Exception:
+            return {"ok": True}
+    except HTTPException:
+        raise
+    except requests.Timeout:
+        raise HTTPException(status_code=504, detail="Temps d'espera esgotat contactant el servidor principal")
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"No s'ha pogut contactar el servidor principal: {e}")
 
 @app.post("/api/auth")
 def auth(req: AuthRequest):
