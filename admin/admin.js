@@ -1140,17 +1140,21 @@ async function loadTestOverlayData() {
 
   try {
     // Carrega tots els tests en paral·lel
-    const [commonResponse, aiResponse, synonymsResponse] = await Promise.all([
-      fetch(`${RANKINGS_API}/${selected}/test-words`, {
-        headers: { ...authHeaders() },
-      }),
-      fetch(`${RANKINGS_API}/${selected}/test-words-ai`, {
-        headers: { ...authHeaders() },
-      }).catch(() => null), // No fa error si no existeix el fitxer AI
-      fetch(`${RANKINGS_API}/${selected}/test-words-synonyms`, {
-        headers: { ...authHeaders() },
-      }).catch(() => null), // No fa error si no hi ha sinònims
-    ]);
+    const [commonResponse, aiResponse, synonymsResponse, dtResponse] =
+      await Promise.all([
+        fetch(`${RANKINGS_API}/${selected}/test-words`, {
+          headers: { ...authHeaders() },
+        }),
+        fetch(`${RANKINGS_API}/${selected}/test-words-ai`, {
+          headers: { ...authHeaders() },
+        }).catch(() => null), // No fa error si no existeix el fitxer AI
+        fetch(`${RANKINGS_API}/${selected}/test-words-synonyms`, {
+          headers: { ...authHeaders() },
+        }).catch(() => null), // No fa error si no hi ha sinònims
+        fetch(`${RANKINGS_API}/${selected}/test-words-deftest`, {
+          headers: { ...authHeaders() },
+        }).catch(() => null), // No fa error si no hi ha deftest
+      ]);
 
     if (!testVisible) return; // si s'ha tancat mentre carregava
 
@@ -1167,14 +1171,19 @@ async function loadTestOverlayData() {
       synonymsData = await synonymsResponse.json();
     }
 
-    renderTestTabs(commonData, aiData, synonymsData, overlay);
+    let dtData = null;
+    if (dtResponse && dtResponse.ok) {
+      dtData = await dtResponse.json();
+    }
+
+    renderTestTabs(commonData, aiData, synonymsData, overlay, dtData);
   } catch (e) {
     overlay.innerHTML =
       '<div class="text-danger small">Error carregant test</div>';
   }
 }
 
-function renderTestTabs(commonData, aiData, synonymsData, overlay) {
+function renderTestTabs(commonData, aiData, synonymsData, overlay, dtData) {
   const hasAiTest = aiData && aiData.words && aiData.words.length > 0;
   const hasSynonymsTest =
     synonymsData && synonymsData.groups && synonymsData.groups.length > 0;
@@ -1191,7 +1200,7 @@ function renderTestTabs(commonData, aiData, synonymsData, overlay) {
         <div class="btn-group btn-group-sm" role="group">
           <button class="btn btn-outline-primary active" id="tab-common" onclick="switchTestTab('common')" title="Test Comú (${
             commonData.count
-          })">Comú</button>
+          })">CM</button>
           ${
             hasAiTest
               ? `<button class="btn btn-outline-primary" id="tab-ai" onclick="switchTestTab('ai')" title="Test IA (${aiData.count})">IA</button>`
@@ -1200,6 +1209,11 @@ function renderTestTabs(commonData, aiData, synonymsData, overlay) {
           ${
             hasSynonymsTest
               ? `<button class="btn btn-outline-primary" id="tab-synonyms" onclick="switchTestTab('synonyms')" title="Sinònims ${wordsByPos[0].word} (${synonymsData.count})">SC</button>`
+              : ""
+          }
+          ${
+            dtData && dtData.items && dtData.items.length > 0
+              ? `<button class="btn btn-outline-primary" id="tab-dt" onclick="switchTestTab('dt')" title="Test de definicions (${dtData.items.length})">DT</button>`
               : ""
           }
           ${
@@ -1280,7 +1294,7 @@ function renderTestTabs(commonData, aiData, synonymsData, overlay) {
   if (hasSynonymsTest) {
     if (synonymsData.groups && synonymsData.groups.length > 0) {
       synonymsRows = synonymsData.groups
-        .map((group, groupIndex) => {
+        .map((group) => {
           const groupWords = group.words
             .map((w) => {
               if (w.found) {
@@ -1417,6 +1431,47 @@ function renderTestTabs(commonData, aiData, synonymsData, overlay) {
         : ""
     }
     ${
+      dtData && dtData.items && dtData.items.length > 0
+        ? `
+    <div id="test-dt-content" class="test-tab-content" style="display:none;">
+      <div class="test-body-dt" id="test-body-dt" style="font-size:13px;">
+        ${dtData.items
+          .map((item) => {
+            const defHtml = `<div class="synonym-group-header" style="font-size: 11px; color: #666; margin-bottom: 4px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${
+              item.definition || ""
+            }">${item.definition || ""}</div>`;
+            const wordsHtml = (item.words || [])
+              .map((w) => {
+                if (w.found) {
+                  return `<div class="test-row-synonyms" data-word="${
+                    w.word
+                  }" data-pos="${
+                    w.pos
+                  }" draggable="true" style="cursor: grab; display: flex; align-items: center; justify-content: space-between;">
+                    <span style="color:${colorPerPos(w.pos)}">${w.word}</span>
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                      <a href="#" data-pos="${
+                        w.pos
+                      }" class="jump" title="Ves a posició"> (${w.pos})</a>
+                      <button class="test-word-menu-btn" data-word="${
+                        w.word
+                      }" data-pos="${
+                    w.pos
+                  }" title="Més opcions" style="border: none; background: transparent; cursor: pointer; padding: 2px 4px; font-size: 12px; color: #666;">⋮</button>
+                    </div>
+                  </div>`;
+                }
+                return `<div class="test-row-synonyms"><span class="text-muted">${w.word}</span> <span class="jump" style="font-size:11px">(no)</span></div>`;
+              })
+              .join("");
+            return `<div class="synonym-group" style="margin-bottom: 12px;">${defHtml}<div class="dt-words" style="font-size:13px;display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:4px;">${wordsHtml}</div></div>`;
+          })
+          .join("")}
+      </div>
+    </div>`
+        : ""
+    }
+    ${
       hasCustomSynonyms
         ? `
     <div id="test-custom-content" class="test-tab-content" style="display:none;">
@@ -1435,6 +1490,31 @@ function renderTestTabs(commonData, aiData, synonymsData, overlay) {
   `;
 
   // Assigna events
+  // Events DT: clic i menú per botons de paraula
+  const dtContainer = document.getElementById("test-body-dt");
+  if (dtContainer) {
+    dtContainer.querySelectorAll(".word-btn").forEach((btn) => {
+      const w = btn.getAttribute("data-word");
+      btn.addEventListener("click", async () => {
+        const currentTop = 0;
+        await unifiedInsertOrMove(w, currentTop, {
+          highlight: true,
+          special: true,
+          forceScroll: true,
+          fromTest: true,
+        });
+      });
+      btn.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        showTestWordMenu(
+          e,
+          w,
+          (wordsByPos[w] && wordsByPos[w].pos) || null,
+          btn
+        );
+      });
+    });
+  }
   const closeBtn = document.getElementById("close-test");
   if (closeBtn) closeBtn.onclick = () => hideTestOverlay();
 
@@ -1537,6 +1617,7 @@ window.switchTestTab = function (tabName) {
       if (id === "tab-common") currentTab = "common";
       else if (id === "tab-ai") currentTab = "ai";
       else if (id === "tab-synonyms") currentTab = "synonyms";
+      else if (id === "tab-dt") currentTab = "dt";
       else if (id === "tab-custom") currentTab = "custom";
       else if (id === "tab-text") currentTab = "text";
     }
@@ -1637,6 +1718,7 @@ function saveTestState() {
     if (tabId === "tab-common") testState.activeTab = "common";
     else if (tabId === "tab-ai") testState.activeTab = "ai";
     else if (tabId === "tab-synonyms") testState.activeTab = "synonyms";
+    else if (tabId === "tab-dt") testState.activeTab = "dt";
     else if (tabId === "tab-custom") testState.activeTab = "custom";
     else if (tabId === "tab-text") testState.activeTab = "text";
   }

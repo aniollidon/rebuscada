@@ -1,5 +1,6 @@
 import os
 from fastapi import FastAPI, HTTPException, Request, Depends
+import json
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Dict
 from pydantic import BaseModel
@@ -19,6 +20,9 @@ load_dotenv()
 
 WORDS_DIR = Path(__file__).parent / "data" / "words"
 WORDS_DIR.mkdir(parents=True, exist_ok=True)
+
+DEFTESTS_DIR = Path(__file__).parent / "data" / "words" / "deftests"
+DEFTESTS_DIR.mkdir(parents=True, exist_ok=True)
 
 COMMENTS_DIR = Path(__file__).parent / "data" / "words" / "comments"
 COMMENTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -860,6 +864,92 @@ def ranking_test_words_synonyms(filename: str, _: None = Depends(require_auth)):
             })
     
     return {"count": total_count, "groups": out_groups}
+
+def _format_deftest_definition(entry: dict) -> str:
+    """
+    Formata la definició per mostrar-la millor.
+    NUM.SUBNUM (FRASE FETA) <MORFOLOGIA> [CATEGORIES] DEFINICIÓ
+    """
+    text = entry.get("text", "")
+    num = entry.get("num")
+    subnum = entry.get("subnum")
+    phrase_made = entry.get("phrase_made")
+    morfologia = entry.get("morfologia")
+    categories = entry.get("categories", [])
+
+    parts = []
+    
+    # NUM.SUBNUM
+    if num:
+        if subnum:
+            parts.append(f"{num}.{subnum}")
+        else:
+            parts.append(f"{num}")
+    
+    # (FRASE FETA)
+    if phrase_made:
+        parts.append(f"({phrase_made})")
+    
+    # <MORFOLOGIA>
+    if morfologia:
+        # Escapem els caràcters < i > per evitar problemes amb HTML
+        morf_escaped = str(morfologia).replace("<", "&lt;").replace(">", "&gt;")
+        parts.append(f"&lt;{morf_escaped}&gt;")
+        
+    # [CATEGORIES]
+    if categories:
+        parts.append(f"[{', '.join(categories)}]")
+        
+    parts.append(text)
+    
+    return " ".join(parts)
+
+@app.get("/api/rankings/{filename}/test-words-deftest")
+def ranking_test_words_deftest(filename: str, _: None = Depends(require_auth)):
+    """Retorna les paraules del test de definicions (deftest)."""
+    base_word = filename.replace('.json', '').lower().strip()
+    deftest_path = DEFTESTS_DIR / f"{base_word}.deftest.json"
+    
+    if not deftest_path.exists():
+        # Si no existeix el fitxer específic, retornem llista buida en lloc de 404
+        # perquè el frontend pugui gestionar-ho elegantment o mostrar missatge
+        return {"entry": base_word, "items": []}
+        
+    try:
+        with open(deftest_path, encoding="utf-8") as f:
+            deftest_data = json.load(f)
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error llegint fitxer deftest.")
+
+    file_path = WORDS_DIR / filename
+    ranking = {}
+    if file_path.exists():
+        with open(file_path, encoding="utf-8") as f:
+            ranking = json.load(f)
+
+    items = []
+    for definition_entry in deftest_data.get("definitions", []):
+        test_words = definition_entry.get("test", [])
+        
+        formatted_words = []
+        for w in test_words:
+            wl = str(w).strip().lower()
+            if not wl:
+                continue
+            if wl in ranking:
+                formatted_words.append({"word": w, "found": True, "pos": ranking[wl]})
+            else:
+                formatted_words.append({"word": w, "found": False})
+        
+        items.append({
+            "definition": _format_deftest_definition(definition_entry),
+            "words": formatted_words
+        })
+
+    return {
+        "entry": deftest_data.get("entry", base_word),
+        "items": items
+    }
 
 @app.get("/api/rankings/{filename}/test-words-synonyms-custom/{word}")
 def ranking_test_words_synonyms_custom(filename: str, word: str, _: None = Depends(require_auth)):
