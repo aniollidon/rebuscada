@@ -94,8 +94,32 @@ DIEC_TAG_MAP = {
     'ZOR': 'amfibis i rèptils',
 }
 
+def esborrar_accents(text: str) -> str:
+    accents = {
+        'à': 'a',
+        'è': 'e',
+        'é': 'e',
+        'í': 'i',
+        'ï': 'i',
+        'ò': 'o',
+        'ó': 'o',
+        'ú': 'u',
+        'ü': 'u',
+        'À': 'A',
+        'È': 'E',
+        'É': 'E',
+        'Í': 'I',
+        'Ï': 'I',
+        'Ò': 'O',
+        'Ó': 'O',
+        'Ú': 'U',
+        'Ü': 'U',
+    }
+    for acc, noacc in accents.items():
+        text = text.replace(acc, noacc)
+    return text
 
-def get_definition_ids(term: str) -> List[str]:
+def get_definition_ids(term: str) -> List[str]:   
     url = f"{BASE_URL}?DecEntradaText={requests.utils.quote(term)}"
     r = requests.get(url, timeout=15)
     if r.status_code != 200:
@@ -171,12 +195,24 @@ def split_entries_with_tags(text: str) -> List[dict]:
     return entries
 
 
-def parse_entries_from_html(html_fragment: str) -> List[dict]:
+def parse_entries_from_html(html_fragment: str) -> Dict[str, Any]:
     # Debug HTML disabled in production; enable if needed
     def strip_sense_prefix(t: str) -> str:
         t = t.strip()
         t = re.sub(r"^(?:\d+\s*)+(?:[mf]\.)?\s*", "", t, flags=re.IGNORECASE)
         return t.strip()
+
+    # Extract title (mot) from h tag before cleaning
+    extracted_mot = ""
+    title_match = re.search(r'<span[^>]*class="title"[^>]*>(.*?)</span>', html_fragment, flags=re.IGNORECASE | re.DOTALL)
+    if title_match:
+        raw_title = title_match.group(1)
+        # Remove sup tags and content
+        raw_title = re.sub(r'<sup[^>]*>.*?</sup>', '', raw_title, flags=re.IGNORECASE | re.DOTALL)
+        # Remove other tags
+        raw_title = re.sub(r'<[^>]+>', '', raw_title)
+        extracted_mot = raw_title.strip()
+
     # Pre-clean noisy attributes and tags as requested
     cleaned = re.sub(r'xmlns:fo="http://www\.w3\.org/1999/XSL/Format"', '', html_fragment)
     cleaned = re.sub(r'onmouseover="doTooltip\(.*?\)"', '', cleaned, flags=re.IGNORECASE|re.DOTALL)
@@ -184,6 +220,7 @@ def parse_entries_from_html(html_fragment: str) -> List[dict]:
     cleaned = re.sub(r'class="body"', '', cleaned, flags=re.IGNORECASE)
     cleaned = re.sub(r"<A href=.*?>|</ *A>", "", cleaned, flags=re.IGNORECASE|re.DOTALL)
     cleaned = re.sub(r"<span\s+class=\"rodona\">\)\s*</span>", "", cleaned, flags=re.IGNORECASE)
+
     # Elimina h1-h6 tags and content
     cleaned = re.sub(r"<h[1-6][^>]*>.*?</h[1-6]>", "", cleaned, flags=re.IGNORECASE|re.DOTALL)
     # Esborra \n
@@ -299,11 +336,17 @@ def parse_entries_from_html(html_fragment: str) -> List[dict]:
     if not entries:
         raw_text = soup.get_text(' ', strip=True)
         entries.append({'text': raw_text, 'tags': [], 'categories': [], 'examples': []})
-    return entries
+    return {'mot': extracted_mot, 'entries': entries}
 
 
 def extract_diec2_definitions(term: str) -> List[dict]:
-    ids = get_definition_ids(term)
+    term = term.lower().strip()
+
+    # Esborra els accents de term
+    term_noaccents = esborrar_accents(term)
+
+    ids = get_definition_ids(term_noaccents)
+
     if not ids:
         return []
     defs: List[dict] = []
@@ -312,38 +355,32 @@ def extract_diec2_definitions(term: str) -> List[dict]:
         payload = fetch_definition_content(def_id)
         if not payload:
             continue
+        
+        # Nomes aquelles entrades que coincideixen amb el terme (sense accents)
+        # Després es comprova que el mot HTML també coincideixi, estalvi computacional
         mot = str(payload.get("mot", ""))
-        if mot != term:
+        if mot != term_noaccents:
             continue
+
         content = payload.get("content", "")
         if not content:
             continue
+        
         # Build entries directly from HTML to preserve examples
-        entries = parse_entries_from_html(content)
+        parsed = parse_entries_from_html(content)
+        entries = parsed['entries']
+        html_mot = parsed['mot'].lower().strip()
+        
+        # Només aquelles definicions exactes del terme
+        if html_mot != term:
+            continue
+
         for e in entries:
             etxt = e['text']
             if etxt and etxt not in seen_texts:
                 seen_texts.add(etxt)
                 defs.append(e)
     return defs
-
-
-def main2():
-    v = '''<span><span class="bolditalic"> cap pelat </span>Cap sense cabells. </span><br><span><B>1 </B>
-  <I>7 </I></span> <span><span class="tip"> [LC] </span> </span><span><span class="bolditalic"> de cap </span><I>loc.
-    adv.
-  </I><B>a</B><span class="rodona">) </span>Anant primerament el cap. <span class="italic">Tirar-se de cap al mar.
-  </span></span><br><span><B>1 </B>
-  <I>7 </I></span> <span><span class="tip"> [LC] </span> </span><span><span class="bolditalic"> de cap </span><I>loc.
-    adv.
-  </I><B>b</B><span class="rodona">) </span>Directament i sense torbar-se. <span class="italic">A cops i empentes el van
-    portar de cap a
-    les masmorres. </span></span><br><span><B>1 </B> <I>8 </I></span> <span><span class="tip"> [LC] </span>
-</span>'''
-    obj = (parse_entries_from_html(v))
-    # to json
-    import json
-    print(json.dumps(obj, ensure_ascii=False, indent=2))
 
 def main():
     if len(sys.argv) < 2:
