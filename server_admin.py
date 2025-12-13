@@ -876,6 +876,7 @@ def _format_deftest_definition(entry: dict) -> str:
     phrase_made = entry.get("phrase_made")
     morfologia = entry.get("morfologia")
     categories = entry.get("categories", [])
+    tags = entry.get("tags", [])
 
     parts = []
     
@@ -897,8 +898,33 @@ def _format_deftest_definition(entry: dict) -> str:
         parts.append(f"&lt;{morf_escaped}&gt;")
         
     # [CATEGORIES]
-    if categories:
-        parts.append(f"[{', '.join(categories)}]")
+    cats_html = []
+    if tags:
+        # Si tenim tags, els mostrem.
+        # Intentem fer servir les categories com a tooltip.
+        # Si la longitud coincideix, assumim correspondència 1 a 1.
+        # Si no, posem totes les categories com a tooltip de tots els tags.
+        
+        tooltip_base = ", ".join(categories) if categories else ""
+        
+        for i, t in enumerate(tags):
+            this_tooltip = tooltip_base
+            # Si tenim el mateix nombre de tags i categories, intentem ser específics
+            if categories and len(categories) == len(tags):
+                this_tooltip = categories[i]
+            
+            if this_tooltip:
+                cats_html.append(f'<span title="{this_tooltip}" style="cursor:help; border-bottom:1px dotted #999;">{t}</span>')
+            else:
+                cats_html.append(t)
+                
+    elif categories:
+        # Si no tenim tags, mostrem les categories tal qual
+        for c in categories:
+            cats_html.append(c)
+
+    if cats_html:
+        parts.append(f"[{', '.join(cats_html)}]")
         
     parts.append(text)
     

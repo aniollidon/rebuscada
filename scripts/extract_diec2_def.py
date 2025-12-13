@@ -182,7 +182,7 @@ def parse_entries_from_html(html_fragment: str) -> List[dict]:
     cleaned = re.sub(r'onmouseover="doTooltip\(.*?\)"', '', cleaned, flags=re.IGNORECASE|re.DOTALL)
     cleaned = re.sub(r'onmouseout="hideTip\(\)"', '', cleaned, flags=re.IGNORECASE)
     cleaned = re.sub(r'class="body"', '', cleaned, flags=re.IGNORECASE)
-    cleaned = re.sub(r"<A href=.*?A>", "", cleaned, flags=re.IGNORECASE|re.DOTALL)
+    cleaned = re.sub(r"<A href=.*?>|</ *A>", "", cleaned, flags=re.IGNORECASE|re.DOTALL)
     cleaned = re.sub(r"<span\s+class=\"rodona\">\)\s*</span>", "", cleaned, flags=re.IGNORECASE)
     # Elimina h1-h6 tags and content
     cleaned = re.sub(r"<h[1-6][^>]*>.*?</h[1-6]>", "", cleaned, flags=re.IGNORECASE|re.DOTALL)
@@ -283,7 +283,7 @@ def parse_entries_from_html(html_fragment: str) -> List[dict]:
             for node in seg_soup.select(sel):
                 node.decompose()
         # Also remove any other spans that have an unknown class (keep spans without class)
-        allowed_classes = {"tip", "tagline", "italic", "bolditalic"}
+        allowed_classes = {"tip", "tagline", "italic", "bolditalic", "versaleta"}
         for node in seg_soup.select('span'):
             classes = node.get('class')
             if classes and not any(c in allowed_classes for c in classes):

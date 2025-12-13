@@ -54,6 +54,7 @@ def build_tests_for_definitions(entry: str, gen: int, model, dicc_terms: List[st
             'morfologia': d.get('morfologia'),
             'phrase_made': d.get('phrase_made'),
             'categories': d.get('categories', []),
+            'tags': d.get('tags', []),
         })
         if include_categories:
             for cat in d.get('categories', []) or []:

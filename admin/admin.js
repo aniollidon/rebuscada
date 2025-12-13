@@ -1183,6 +1183,20 @@ async function loadTestOverlayData() {
   }
 }
 
+window.toggleDtSection = function (header) {
+  const container = header.nextElementSibling;
+  const icon = header.querySelector(".dt-toggle-icon");
+  if (container) {
+    if (container.style.display === "none") {
+      container.style.display = "grid";
+      if (icon) icon.innerHTML = "&#x25BC;";
+    } else {
+      container.style.display = "none";
+      if (icon) icon.innerHTML = "&#x25B6;";
+    }
+  }
+};
+
 function renderTestTabs(commonData, aiData, synonymsData, overlay, dtData) {
   const hasAiTest = aiData && aiData.words && aiData.words.length > 0;
   const hasSynonymsTest =
@@ -1213,7 +1227,7 @@ function renderTestTabs(commonData, aiData, synonymsData, overlay, dtData) {
           }
           ${
             dtData && dtData.items && dtData.items.length > 0
-              ? `<button class="btn btn-outline-primary" id="tab-dt" onclick="switchTestTab('dt')" title="Test de definicions (${dtData.items.length})">DT</button>`
+              ? `<button class="btn btn-outline-primary" id="tab-dt" onclick="switchTestTab('dt')" title="Test a partir de definicions DIEC2 (${dtData.items.length})">D2</button>`
               : ""
           }
           ${
@@ -1437,9 +1451,9 @@ function renderTestTabs(commonData, aiData, synonymsData, overlay, dtData) {
       <div class="test-body-dt" id="test-body-dt" style="font-size:13px;">
         ${dtData.items
           .map((item) => {
-            const defHtml = `<div class="synonym-group-header" style="font-size: 11px; color: #666; margin-bottom: 4px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${
+            const defHtml = `<div class="synonym-group-header" onclick="toggleDtSection(this)" style="cursor:pointer; font-size: 11px; color: #666; margin-bottom: 4px; font-weight: 500; white-space: normal;"><span class="dt-toggle-icon" style="display:inline-block; width:12px;font-family: initial;">▶</span> ${
               item.definition || ""
-            }">${item.definition || ""}</div>`;
+            }</div>`;
             const wordsHtml = (item.words || [])
               .map((w) => {
                 if (w.found) {
@@ -1464,7 +1478,7 @@ function renderTestTabs(commonData, aiData, synonymsData, overlay, dtData) {
                 return `<div class="test-row-synonyms"><span class="text-muted">${w.word}</span> <span class="jump" style="font-size:11px">(no)</span></div>`;
               })
               .join("");
-            return `<div class="synonym-group" style="margin-bottom: 12px;">${defHtml}<div class="dt-words" style="font-size:13px;display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:4px;">${wordsHtml}</div></div>`;
+            return `<div class="synonym-group" style="margin-bottom: 12px;">${defHtml}<div class="dt-words" style="font-size:13px;display:none;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:4px;">${wordsHtml}</div></div>`;
           })
           .join("")}
       </div>
