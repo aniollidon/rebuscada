@@ -118,7 +118,7 @@ load_dotenv()
 app = FastAPI()
 
 # Versió de l'API - incrementar quan hi hagi canvis incompatibles amb localStorage
-API_VERSION = "1.0.0"
+API_VERSION = "1.0.1"
 
 @app.on_event("startup")
 async def startup_event():

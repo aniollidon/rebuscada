@@ -8,7 +8,7 @@ from typing import List, Dict, Any, Tuple
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from scripts.extract_diec2_def import extract_diec2_definitions  # type: ignore
-from scripts.clean_txt import concepts_from_text  # type: ignore
+from scripts.clean_txt import concepts_from_text, extract_keywords_rake  # type: ignore
 from proximitat import carregar_model_fasttext, calcular_similitud_cosinus
 from diccionari import Diccionari
 
@@ -34,7 +34,7 @@ def top_n_from_text_terms(terms: List[str],
     return [w for w, _ in sims[:n]]
 
 
-def build_tests_for_definitions(entry: str, gen: int, model, dicc_terms: List[str], prefer_spacy: bool = True, include_categories: bool = False) -> Dict[str, Any]:
+def build_tests_for_definitions(entry: str, gen: int, model, dicc_terms: List[str], prefer_spacy: bool = True, include_categories: bool = False, use_rake: bool = False) -> Dict[str, Any]:
     defs = extract_diec2_definitions(entry)
 
     # Build definitions array with tests
@@ -44,7 +44,11 @@ def build_tests_for_definitions(entry: str, gen: int, model, dicc_terms: List[st
 
     for d in defs:
         text = d.get('text', '') or ''
-        tokens = concepts_from_text(text, prefer_spacy=prefer_spacy, keep_case=True)
+        if use_rake:
+            tokens = extract_keywords_rake(text)
+        else:
+            tokens = concepts_from_text(text, prefer_spacy=prefer_spacy, keep_case=True)
+        
         test_list = top_n_from_text_terms(tokens, model, dicc_terms, gen)
         definitions.append({
             'text': text,
@@ -75,7 +79,10 @@ def build_tests_for_definitions(entry: str, gen: int, model, dicc_terms: List[st
     if include_categories:
         categories: List[Dict[str, Any]] = []
         for cat_text in category_texts_order:
-            cat_tokens = concepts_from_text(cat_text, prefer_spacy=prefer_spacy, keep_case=True)
+            if use_rake:
+                cat_tokens = extract_keywords_rake(cat_text)
+            else:
+                cat_tokens = concepts_from_text(cat_text, prefer_spacy=prefer_spacy, keep_case=True)
             cat_test = top_n_from_text_terms(cat_tokens, model, dicc_terms, gen)
             categories.append({'text': cat_text, 'test': cat_test})
         result['categories'] = categories
@@ -90,6 +97,7 @@ def main():
     parser.add_argument('--freq-min', required=False, type=int, default=20, help='Freqüència mínima per filtrar diccionari')
     parser.add_argument('--no-spacy', action='store_true', help='Desactiva spaCy i usa el mode de reserva lleuger')
     parser.add_argument('--categories', action='store_true', help='Inclou el tractament de categories DIEC2')
+    parser.add_argument('--rake', action='store_true', help='Utilitza l\'algoritme RAKE per extreure paraules clau')
     args = parser.parse_args()
 
     if not args.paraula and not args.folder:
@@ -129,6 +137,8 @@ def main():
             continue
 
         print(f"Processant: {word}")
+        print(f"Fent servir l'algorisme {'RAKE' if args.rake else 'normal'} per extreure conceptes.")
+        print(f"Utilitzant spaCy: {'sí' if prefer_spacy else 'no'}")
         try:
             result = build_tests_for_definitions(
                 word,
@@ -137,6 +147,7 @@ def main():
                 dicc_terms,
                 prefer_spacy=prefer_spacy,
                 include_categories=args.categories,
+                use_rake=args.rake,
             )
             
             with open(out_path, 'w', encoding='utf-8') as f:
@@ -146,5 +157,5 @@ def main():
             print(f"  [ERROR] Error processant '{word}': {e}")
 
 
-if __name__ == '__main__':
-    main()
+if __name__ == '__main__':    main()
+

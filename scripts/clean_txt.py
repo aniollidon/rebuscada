@@ -3,6 +3,7 @@ import re
 import sys
 import os
 from typing import List, Optional
+from collections import Counter, defaultdict
 
 # Allow importing from repo root if needed
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -32,9 +33,36 @@ CAT_STOPWORDS = set(map(str.lower, [
     "molt","molta","molts","moltes","poc","poca","pocs","poques","més","menys","tant","tanta","tants","tantes",
     "aquest","aquesta","aquests","aquestes","aquell","aquella","aquells","aquelles","allò","això","així",
     "jo","tu","ell","ella","nosaltres","vosaltres","ells","elles","me","em","m","te","t","se","s",
-    "li","ens","us","vos","els","les","ho","lo","la","ne","hi",
+    "li","ens","us","vos","els","les","ho","lo","la","ne","hi", "per", "pel", "pels",
     "no","sí","ja","també","doncs","donc","però","sinó","tanmateix","encara","només","sols",
-    "dins","fora","sobre","davall","damunt","a","la","el","del","de","les","als",
+    "dins","fora","sobre","davall","sovint","damunt","a","la","el","del","de","les","als", "l", "n", "d", 
+    "ésser", "color", "després", "forma", "diverses", "divers", "quan", "dimensions", "conté",
+    "contenir", "tipus", "varietat", "varietats", "seu", "seus", "mateix", "mateixa", "mateixos", "mateixes",
+    "part", "parts", "funció", "funcions", "són", "estat", "situat", "situada",
+    "situats", "situades", "constitueix", "constituir", "inclou", "incloure", "inclouen", "incloent",
+    "forma","formes","fins","finalment","això","allò","aquest","aquesta","aquests","aquestes",
+    "aquell","aquella","aquells","aquelles","alguns","algunes","altres","altres","cada","cada",
+    "cert","certa","certs","certes","diversos","diverses","moltíssim","moltíssima","moltíssims","moltíssimes",
+    "poquissim","poquíssima","poquíssims","poquíssimes","qualsevol","qualsevol","tothom","ningú",
+    "primer","primera","primers","primeres","segon","segona","segons","segones",
+    "tercer","tercera","tercers","terceres", "últim","última","últims","últimes",
+    "darrer","darrera","darrers","darreres", "gran","gran","grans","gros","grossa","grossos","grosses",
+    "petit","petita","petits","petites","alt","alta","alts","altes","baix","baixa","baixos","baixes",
+    "nou","nova","nous","noves","vell","vella","vells","velles",
+    "bo","bona","bons","bones","dolent","dolenta","dolents","dolentes",
+    "bé","malament","moltíssim","moltíssima","moltíssims","moltíssimes",
+    "poc","poca","pocs","poques", "mica", "semblant", "varietat", "tipus", "classe", "classes", "categoria", "categories",
+    "posar","posat","posada","posats","posades", "fer","fet","feta","fets","fetes",
+    "estar","estat","estada","estats","estades", "anar","anat","anada","anats","anades",
+    "venir","vingut","vinguda","vinguts","vingudes", "donar","donat","donada","donats","donades",
+    "tenir","tingut","tinguda","tinguts","tingudes", "haver","hagut","haguada","haguts","hagudes",
+    "fer","fa","fan","feia","feien","fet","feta","fets","fetes",
+    "cosa","coses","assumpte","assumptes","element","elements","factor","factors",
+    "aspecte","aspectes","punt","punts","detall","detalls","tema","temes",
+    "qüestió","qüestions","problema","problemes","situació","situacions","condició","condicions",
+    "capacitat","capacitats","possibilitat","possibilitats","funció","funcions","objectiu","objectius",
+    "finalitat","finalitats",
+
 ]))
 
 # Very small set of frequent verbs or auxiliaries to drop in fallback mode
@@ -43,7 +71,7 @@ CAT_COMMON_VERBS = set(map(str.lower, [
     "ocupar","ocupa","ocupen","ocupava","ocupat","ocupada",
 ]))
 
-TOKEN_RE = re.compile(r"[\wÀ-ÖØ-öø-ÿ'-]+", re.UNICODE)
+TOKEN_RE = re.compile(r"[\wÀ-ÖØ-öø-ÿ'·-]+", re.UNICODE)
 
 
 def tokenize(text: str) -> List[str]:
@@ -97,6 +125,73 @@ def concepts_from_text(text: str, prefer_spacy: bool = True, keep_case: bool = T
     if prefer_spacy and _maybe_load_spacy() is not None:
         return clean_with_spacy(text, keep_case=keep_case)
     return clean_fallback(text, keep_case=keep_case)
+
+
+def extract_keywords_rake(text: str, min_chars: int = 3) -> List[str]:
+    """
+    Implementation of RAKE (Rapid Automatic Keyword Extraction).
+    Returns a list of unique words found in the top ranked phrases.
+    """
+    # 1. Split into phrases by punctuation
+    phrases = re.split(r'[.!?,;:\t\n\r\(\)\[\]\{\}]', text)
+    
+    # 2. Generate candidate keywords (sequences of non-stopwords)
+    candidates = []
+    for phrase in phrases:
+        phrase_tokens = tokenize(phrase)
+        current_candidate = []
+        for token in phrase_tokens:
+            # Filter: stopwords, short words, numbers
+            if is_stop(token) or len(token) < min_chars or token.isnumeric():
+                if current_candidate:
+                    candidates.append(current_candidate)
+                    current_candidate = []
+            else:
+                current_candidate.append(token)
+        if current_candidate:
+            candidates.append(current_candidate)
+            
+    # 3. Calculate word scores
+    word_freq = Counter()
+    word_degree = defaultdict(int)
+    
+    for candidate in candidates:
+        list_len = len(candidate)
+        # RAKE metric: degree(w) = sum of lengths of candidates containing w
+        # (co-occurrence count + self-occurrence)
+        for word in candidate:
+            word_lower = word.lower()
+            word_freq[word_lower] += 1
+            word_degree[word_lower] += list_len
+            
+    # 4. Calculate candidate scores
+    candidate_scores = {}
+    for candidate in candidates:
+        score = 0
+        for word in candidate:
+            w = word.lower()
+            if word_freq[w] > 0:
+                score += word_degree[w] / word_freq[w]
+        
+        cand_str = " ".join(candidate)
+        candidate_scores[cand_str] = score
+        
+    # 5. Sort by score
+    sorted_candidates = sorted(candidate_scores.items(), key=lambda x: x[1], reverse=True)
+    
+    # 6. Flatten to unique words preserving rank order
+    final_words = []
+    seen = set()
+    for cand_str, score in sorted_candidates:
+        # We want the original casing? RAKE usually works on lower, but we have tokens.
+        # The tokens in candidates are original case from tokenize().
+        for word in cand_str.split():
+            if word.lower() not in seen:
+                final_words.append(word)
+                seen.add(word.lower())
+                
+    return final_words
+
 
 
 def main():
