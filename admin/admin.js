@@ -185,8 +185,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   renderApp();
   const ok = await ensureAuthenticated();
   if (ok) {
+    // Carrega el calendari primer per poder detectar assignacions
+    await loadCalendarGames();
     fetchFiles();
-    loadCalendarGames(); // Carrega el calendari de paraules
   }
 });
 
