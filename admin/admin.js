@@ -1259,7 +1259,7 @@ function renderTestTabs(commonData, aiData, synonymsData, overlay, dtData) {
         <div class="btn-group btn-group-sm" role="group">
           <button class="btn btn-outline-primary active" id="tab-common" onclick="switchTestTab('common')" title="Test Comú (${
             commonData.count
-          })">CM</button>
+          })">Cm</button>
           ${
             hasAiTest
               ? `<button class="btn btn-outline-primary" id="tab-ai" onclick="switchTestTab('ai')" title="Test IA (${aiData.count})">IA</button>`
@@ -1277,17 +1277,17 @@ function renderTestTabs(commonData, aiData, synonymsData, overlay, dtData) {
           }
           ${
             hasCustomSynonyms
-              ? `<button class="btn btn-outline-primary" id="tab-custom" onclick="switchTestTab('custom')" title="Sinònims ${customSynonymsData.base_word} (${customSynonymsData.count})">+SC<span id="close-custom-test" style="margin-left:4px; cursor:pointer;" title="Tanca test">✕</span></button>`
-              : `<button class="btn btn-outline-info" id="add-synonyms-test" title="Crear test de sinònims d'una paraula">+Sin</button>`
+              ? `<button class="btn btn-outline-primary" id="tab-custom" onclick="switchTestTab('custom')" title="Sinònims ${customSynonymsData.base_word} (${customSynonymsData.count})">+S<span id="close-custom-test" style="margin-left:4px; cursor:pointer;" title="Tanca test">✕</span></button>`
+              : `<button class="btn btn-outline-info" id="add-synonyms-test" title="Crear test de sinònims d'una paraula">+S</button>`
           }
           ${
             hasCustomText
-              ? `<button class="btn btn-outline-primary" id="tab-text" onclick="switchTestTab('text')" title="Text personalitzat (${customTextData.count})"> Propi <span id="close-custom-text" style="margin-left:4px; cursor:pointer;" title="Tanca test">✕</span></button>`
-              : `<button class="btn btn-outline-success" id="add-text-test" title="Crear test de text personalitzat">+Propi</button>`
+              ? `<button class="btn btn-outline-primary" id="tab-text" onclick="switchTestTab('text')" title="Text personalitzat (${customTextData.count})"> P <span id="close-custom-text" style="margin-left:4px; cursor:pointer;" title="Tanca test">✕</span></button>`
+              : `<button class="btn btn-outline-success" id="add-text-test" title="Crear test de text personalitzat">+P</button>`
           }
           ${
             hasSearchResults
-              ? `<button class="btn btn-outline-primary" id="tab-search" onclick="switchTestTab('search')" title="Resultats de cerca (${searchResultsData.count})">🔍 Cerca <span id="close-search-test" style="margin-left:4px; cursor:pointer;" title="Tanca resultats">✕</span></button>`
+              ? `<button class="btn btn-outline-primary" id="tab-search" onclick="switchTestTab('search')" title="Resultats de cerca (${searchResultsData.count})">Rs<span id="close-search-test" style="margin-left:4px; cursor:pointer;" title="Tanca resultats">✕</span></button>`
               : ""
           }
         </div>
@@ -1476,35 +1476,25 @@ function renderTestTabs(commonData, aiData, synonymsData, overlay, dtData) {
   // Genera contingut de resultats de cerca
   let searchRows = "";
   if (hasSearchResults) {
-    const modeText = searchResultsData.is_regex ? "REGEX" : "conté";
-    searchRows = `
-      <div style="font-size: 11px; color: #666; margin-bottom: 8px;">
-        Cerca: <strong>${searchResultsData.query}</strong> (${modeText}) - ${
-      searchResultsData.count
-    } resultats
-      </div>
-      ${searchResultsData.words
-        .map((w) => {
-          return `<div class="test-row-search" data-word="${
-            w.word
-          }" data-pos="${
-            w.pos
-          }" draggable="true" style="cursor: grab; display: flex; align-items: center; justify-content: space-between;">
-            <span style="color:${colorPerPos(w.pos)}">${w.word}</span>
-            <div style="display: flex; align-items: center; gap: 4px;">
-              <a href="#" data-pos="${
-                w.pos
-              }" class="jump" title="Ves a posició"> (${w.pos})</a>
-              <button class="test-word-menu-btn" data-word="${
-                w.word
-              }" data-pos="${
-            w.pos
-          }" title="Més opcions" style="border: none; background: transparent; cursor: pointer; padding: 2px 4px; font-size: 12px; color: #666;">⋮</button>
-            </div>
-          </div>`;
-        })
-        .join("")}
-    `;
+    searchRows = searchResultsData.words
+      .map((w) => {
+        return `<div class="test-row-search" data-word="${w.word}" data-pos="${
+          w.pos
+        }" draggable="true" style="cursor: grab; display: flex; align-items: center; justify-content: space-between; padding: 4px 6px; border: 1px solid #e0e0e0; border-radius: 4px; min-height: 28px;">
+          <span style="color:${colorPerPos(w.pos)}">${w.word}</span>
+          <div style="display: flex; align-items: center; gap: 4px;">
+            <a href="#" data-pos="${
+              w.pos
+            }" class="jump" title="Ves a posició"> (${w.pos})</a>
+            <button class="test-word-menu-btn" data-word="${
+              w.word
+            }" data-pos="${
+          w.pos
+        }" title="Més opcions" style="border: none; background: transparent; cursor: pointer; padding: 2px 4px; font-size: 12px; color: #666;">⋮</button>
+          </div>
+        </div>`;
+      })
+      .join("");
   }
 
   overlay.innerHTML = `
@@ -1589,6 +1579,11 @@ function renderTestTabs(commonData, aiData, synonymsData, overlay, dtData) {
       hasSearchResults
         ? `
     <div id="test-search-content" class="test-tab-content" style="display:none;">
+      <div style="font-size: 11px;color: #666;margin-bottom: 8px;">
+        Cerca: <strong>${searchResultsData.query}</strong> (${
+            searchResultsData.is_regex ? "REGEX" : "conté"
+          }) - ${searchResultsData.count} resultats
+      </div>
       <div class="test-body-search" id="test-body-search" style="font-size:13px;display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:4px;">${searchRows}</div>
     </div>`
         : ""
