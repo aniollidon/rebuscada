@@ -71,6 +71,8 @@ let difficulties = {}; // filename -> 'facil'|'mitja'|'dificil'
 let comments = {}; // Estat dels comentaris del fitxer actual {global: "", words: {}}
 let customSynonymsData = null; // Dades de test de sinònims personalitzat (temporal)
 let customTextData = null; // Dades de test de text personalitzat (temporal)
+let searchResultsData = null; // Dades de resultats de cerca avançada (temporal)
+let regexModeActive = false; // estat del mode REGEX per a la cerca avançada
 let showOnlyPending = false; // filtre de fitxers no validats
 let showOnlyValidated = false; // filtre de fitxers validats
 let showOnlyFavorites = false; // filtre de fitxers preferits
@@ -245,8 +247,12 @@ function renderApp() {
               <span id="autosave-status" class="text-muted small" style="display:none;">Desant…</span>
             </div>
             <div class="input-group input-group-sm mb-2">
-              <input id="search-word" type="text" class="form-control" placeholder="Cerca paraula..." />
-              <button class="btn btn-outline-secondary" id="search-btn" type="button" title="Cerca">Cerca</button>
+              <div style="position: relative; flex: 1;">
+                <input id="search-word" type="text" class="form-control" placeholder="Cerca paraula..." style="padding-right: 35px;" />
+                <button id="regex-toggle-btn" type="button" title="Mode REGEX (clic per activar/desactivar)" style="position: absolute; right: 5px; top: 50%; transform: translateY(-50%); border: 1px solid #ccc; background: #f8f9fa; color: #666; border-radius: 3px; width: 24px; height: 24px; font-size: 12px; font-weight: bold; cursor: pointer; padding: 0; line-height: 1; transition: all 0.2s;">rx</button>
+              </div>
+              <button class="btn btn-outline-secondary" id="search-btn" type="button" title="Cerca exacta">Cerca</button>
+              <button class="btn btn-outline-primary" id="search-plus-btn" type="button" title="Cerca avançada (conté text o regex)">Cerca+</button>
               <button class="btn btn-outline-success" id="add-new-word-btn" type="button" title="Afegeix una paraula nova al rànquing">+Nova</button>
               <button class="btn btn-outline-info" id="show-test" type="button" title="Mostra paraules test">Test</button>
             </div>
@@ -344,6 +350,7 @@ function renderApp() {
 function bindStaticEvents() {
   document.getElementById("create-file").onclick = createFile;
   const searchBtn = document.getElementById("search-btn");
+  const searchPlusBtn = document.getElementById("search-plus-btn");
   const searchInput = document.getElementById("search-word");
   const testBtn = document.getElementById("show-test");
   const addNewBtn = document.getElementById("add-new-word-btn");
@@ -386,11 +393,28 @@ function bindStaticEvents() {
     };
   }
   if (searchBtn) searchBtn.onclick = () => triggerSearch(searchInput.value);
+  if (searchPlusBtn)
+    searchPlusBtn.onclick = () => triggerAdvancedSearch(searchInput.value);
   if (searchInput) {
     searchInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") triggerSearch(searchInput.value);
     });
   }
+
+  // Botó toggle de mode REGEX
+  const regexToggleBtn = document.getElementById("regex-toggle-btn");
+  if (regexToggleBtn) {
+    // Aplica l'estat inicial
+    updateRegexToggleUI(regexToggleBtn);
+
+    regexToggleBtn.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      regexModeActive = !regexModeActive;
+      updateRegexToggleUI(regexToggleBtn);
+    };
+  }
+
   if (testBtn) testBtn.onclick = toggleTestOverlay;
   if (addNewBtn) addNewBtn.onclick = promptAddNewWord;
   if (settingsBtn) settingsBtn.onclick = openSettingsModal;
@@ -420,6 +444,22 @@ function bindStaticEvents() {
           updateDifficultySelector(); // Reverteix selector
         });
     };
+  }
+}
+
+// Actualitza l'estil del botó toggle de REGEX segons l'estat
+function updateRegexToggleUI(btn) {
+  if (!btn) return;
+  if (regexModeActive) {
+    btn.style.background = "#0d6efd";
+    btn.style.color = "#fff";
+    btn.style.borderColor = "#0d6efd";
+    btn.title = "Mode REGEX activat (clic per desactivar)";
+  } else {
+    btn.style.background = "#f8f9fa";
+    btn.style.color = "#666";
+    btn.style.borderColor = "#ccc";
+    btn.title = "Mode REGEX (clic per activar/desactivar)";
   }
 }
 
@@ -1112,6 +1152,7 @@ function hideTestOverlay() {
   testVisible = false;
   customSynonymsData = null; // Neteja dades de sinònims personalitzats
   customTextData = null; // Neteja dades de text personalitzat
+  searchResultsData = null; // Neteja dades de cerca avançada
   const overlay = document.getElementById("test-overlay");
   const testColumn = document.getElementById("test-column");
   if (overlay) {
@@ -1207,6 +1248,10 @@ function renderTestTabs(commonData, aiData, synonymsData, overlay, dtData) {
     customSynonymsData.groups.length > 0;
   const hasCustomText =
     customTextData && customTextData.words && customTextData.words.length > 0;
+  const hasSearchResults =
+    searchResultsData &&
+    searchResultsData.words &&
+    searchResultsData.words.length > 0;
 
   let tabsHtml = `
     <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px;">
@@ -1239,6 +1284,11 @@ function renderTestTabs(commonData, aiData, synonymsData, overlay, dtData) {
             hasCustomText
               ? `<button class="btn btn-outline-primary" id="tab-text" onclick="switchTestTab('text')" title="Text personalitzat (${customTextData.count})"> Propi <span id="close-custom-text" style="margin-left:4px; cursor:pointer;" title="Tanca test">✕</span></button>`
               : `<button class="btn btn-outline-success" id="add-text-test" title="Crear test de text personalitzat">+Propi</button>`
+          }
+          ${
+            hasSearchResults
+              ? `<button class="btn btn-outline-primary" id="tab-search" onclick="switchTestTab('search')" title="Resultats de cerca (${searchResultsData.count})">🔍 Cerca <span id="close-search-test" style="margin-left:4px; cursor:pointer;" title="Tanca resultats">✕</span></button>`
+              : ""
           }
         </div>
         <div class="btn-group btn-group-sm edit-test-tools-actions" role="group">
@@ -1423,6 +1473,40 @@ function renderTestTabs(commonData, aiData, synonymsData, overlay, dtData) {
       .join("");
   }
 
+  // Genera contingut de resultats de cerca
+  let searchRows = "";
+  if (hasSearchResults) {
+    const modeText = searchResultsData.is_regex ? "REGEX" : "conté";
+    searchRows = `
+      <div style="font-size: 11px; color: #666; margin-bottom: 8px;">
+        Cerca: <strong>${searchResultsData.query}</strong> (${modeText}) - ${
+      searchResultsData.count
+    } resultats
+      </div>
+      ${searchResultsData.words
+        .map((w) => {
+          return `<div class="test-row-search" data-word="${
+            w.word
+          }" data-pos="${
+            w.pos
+          }" draggable="true" style="cursor: grab; display: flex; align-items: center; justify-content: space-between;">
+            <span style="color:${colorPerPos(w.pos)}">${w.word}</span>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <a href="#" data-pos="${
+                w.pos
+              }" class="jump" title="Ves a posició"> (${w.pos})</a>
+              <button class="test-word-menu-btn" data-word="${
+                w.word
+              }" data-pos="${
+            w.pos
+          }" title="Més opcions" style="border: none; background: transparent; cursor: pointer; padding: 2px 4px; font-size: 12px; color: #666;">⋮</button>
+            </div>
+          </div>`;
+        })
+        .join("")}
+    `;
+  }
+
   overlay.innerHTML = `
     ${tabsHtml}
     <div id="test-common-content" class="test-tab-content" style="display:block;">
@@ -1501,6 +1585,14 @@ function renderTestTabs(commonData, aiData, synonymsData, overlay, dtData) {
     </div>`
         : ""
     }
+    ${
+      hasSearchResults
+        ? `
+    <div id="test-search-content" class="test-tab-content" style="display:none;">
+      <div class="test-body-search" id="test-body-search" style="font-size:13px;display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:4px;">${searchRows}</div>
+    </div>`
+        : ""
+    }
   `;
 
   // Assigna events
@@ -1563,6 +1655,16 @@ function renderTestTabs(commonData, aiData, synonymsData, overlay, dtData) {
       e.stopPropagation(); // Evita que es canviï a la pestanya text
       customTextData = null;
       // Després de tancar la pestanya de text, torna a 'common'
+      refreshTestOverlayIfVisible("common");
+    };
+  }
+
+  const closeSearchBtn = document.getElementById("close-search-test");
+  if (closeSearchBtn) {
+    closeSearchBtn.onclick = (e) => {
+      e.stopPropagation(); // Evita que es canviï a la pestanya search
+      searchResultsData = null;
+      // Després de tancar la pestanya de cerca, torna a 'common'
       refreshTestOverlayIfVisible("common");
     };
   }
@@ -1634,6 +1736,7 @@ window.switchTestTab = function (tabName) {
       else if (id === "tab-dt") currentTab = "dt";
       else if (id === "tab-custom") currentTab = "custom";
       else if (id === "tab-text") currentTab = "text";
+      else if (id === "tab-search") currentTab = "search";
     }
     testState.scrollPositions[currentTab] = overlay.scrollTop || 0;
   }
@@ -1795,7 +1898,7 @@ function updateTestWordAttributes(word, newPos) {
 
   const rows = Array.from(
     overlay.querySelectorAll(
-      ".test-row[data-word], .test-row-ai[data-word], .test-row-synonyms[data-word]"
+      ".test-row[data-word], .test-row-ai[data-word], .test-row-synonyms[data-word], .test-row-search[data-word]"
     )
   ).filter(
     (el) =>
@@ -3701,6 +3804,55 @@ function triggerSearch(term) {
       await ensureVisible(res.pos, { highlight: true, forceScroll: true });
     })
     .catch(() => alert("Error en la cerca"));
+}
+
+// Cerca avançada (conté text o regex)
+async function triggerAdvancedSearch(term) {
+  if (!selected) return;
+  const t = term.trim();
+  if (!t) return;
+
+  const isRegex = regexModeActive;
+
+  try {
+    const response = await fetch(
+      `${RANKINGS_API}/${selected}/search?query=${encodeURIComponent(
+        t
+      )}&is_regex=${isRegex}`,
+      { headers: { ...authHeaders() } }
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      alert(errorData.detail || "Error en la cerca");
+      return;
+    }
+
+    const data = await response.json();
+
+    if (!data.words || data.words.length === 0) {
+      alert(`No s'han trobat resultats per: "${t}"`);
+      return;
+    }
+
+    // Guarda els resultats per mostrar-los als tests
+    searchResultsData = {
+      query: t,
+      is_regex: isRegex,
+      count: data.count,
+      words: data.words,
+    };
+
+    // Mostra els tests amb els resultats
+    if (!testVisible) {
+      await toggleTestOverlay();
+    } else {
+      await refreshTestOverlayIfVisible("search");
+    }
+  } catch (e) {
+    console.error("Error en cerca avançada:", e);
+    alert("Error en la cerca");
+  }
 }
 
 // --- Afegir paraula nova al rànquing ---
