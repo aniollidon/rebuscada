@@ -81,6 +81,7 @@ const AUTO_SAVE_DELAY = 800; // ms després de l'últim canvi de drag
 
 // Gestió del calendari
 let calendarGames = []; // llista de {id, name}
+let calendarStartDate = "23-12-2025"; // data d'inici del calendari
 let calendarFilterValidated = false;
 let calendarFilterFavorites = false;
 let calendarFilterUnique = true; // Activat per defecte per evitar repeticions
@@ -554,9 +555,34 @@ async function loadCalendarGames() {
     if (!res.ok) throw new Error("No s'ha pogut carregar games.json");
     const data = await res.json();
     calendarGames = data.games || [];
+    calendarStartDate = data.startDate || "23-12-2025";
   } catch (e) {
     console.error("Error carregant games.json:", e);
     calendarGames = [];
+    calendarStartDate = "23-12-2025";
+  }
+}
+
+// Funció per calcular la data d'un joc segons el seu ID
+function getGameDate(gameId) {
+  try {
+    // Format de startDate: DD-MM-YYYY
+    const [day, month, year] = calendarStartDate.split("-").map(Number);
+    const startDate = new Date(year, month - 1, day);
+
+    // Afegir (gameId - 1) dies a la data d'inici
+    const gameDate = new Date(startDate);
+    gameDate.setDate(startDate.getDate() + (gameId - 1));
+
+    // Formatar com DD-MM-YYYY
+    const d = String(gameDate.getDate()).padStart(2, "0");
+    const m = String(gameDate.getMonth() + 1).padStart(2, "0");
+    const y = gameDate.getFullYear();
+
+    return `${d}-${m}-${y}`;
+  } catch (e) {
+    console.error("Error calculant data del joc:", e);
+    return "--";
   }
 }
 
@@ -623,9 +649,11 @@ function renderCalendarList() {
         ? "bg-danger bg-opacity-25"
         : "";
 
+      const gameDate = getGameDate(game.id);
       return `
       <div class="d-flex align-items-center gap-2 mb-2 p-2 border rounded ${bgClass}" data-cal-idx="${idx}">
         <span class="text-muted" style="min-width: 40px;">${game.id}.</span>
+        <span class="text-muted" style="min-width: 90px; font-size: 11px;">${gameDate}</span>
         <input type="text" 
                class="form-control form-control-sm calendar-word-input" 
                data-cal-idx="${idx}"

@@ -1261,13 +1261,23 @@ class SaveGamesRequest(BaseModel):
 def get_games(_: None = Depends(require_auth)):
     """Retorna el fitxer games.json amb la llista de paraules del calendari."""
     games_path = Path(__file__).parent / "data" / "games.json"
+    date_path = Path(__file__).parent / "data" / "date.json"
     
     if not games_path.exists():
-        return {"games": []}
+        return {"games": [], "startDate": "23-12-2025"}
     
     try:
         with open(games_path, encoding="utf-8") as f:
             data = json.load(f)
+        
+        # Afegeix startDate del fitxer date.json
+        if date_path.exists():
+            with open(date_path, encoding="utf-8") as f:
+                date_data = json.load(f)
+                data["startDate"] = date_data.get("startDate", "23-12-2025")
+        else:
+            data["startDate"] = "23-12-2025"
+        
         return data
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Hi ha un error en llegir games.json: {str(e)}")
