@@ -758,6 +758,44 @@ def find_word(filename: str, word: str, _: None = Depends(require_auth)):
         return {"found": True, "pos": data[w]}
     return {"found": False}
 
+@app.get("/api/rankings/{filename}/search")
+def search_words(filename: str, query: str, is_regex: bool = False, _: None = Depends(require_auth)):
+    """Cerca paraules que continguin el text (o que coincideixin amb regex)."""
+    file_path = WORDS_DIR / filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Fitxer no trobat.")
+    
+    with open(file_path, encoding="utf-8") as f:
+        data = json.load(f)  # dict word->pos
+    
+    query = query.strip()
+    if not query:
+        return {"count": 0, "words": []}
+    
+    results = []
+    
+    if is_regex:
+        # Mode REGEX
+        try:
+            pattern = re.compile(query, re.IGNORECASE)
+        except re.error as e:
+            raise HTTPException(status_code=400, detail=f"Expressió regular no vàlida: {str(e)}")
+        
+        for word, pos in data.items():
+            if pattern.search(word):
+                results.append({"word": word, "pos": pos})
+    else:
+        # Mode cerca parcial (conté el text)
+        query_lower = query.lower()
+        for word, pos in data.items():
+            if query_lower in word.lower():
+                results.append({"word": word, "pos": pos})
+    
+    # Ordena per posició
+    results.sort(key=lambda x: x["pos"])
+    
+    return {"count": len(results), "words": results, "query": query, "is_regex": is_regex}
+
 @app.get("/api/rankings/{filename}/test-words")
 def ranking_test_words(filename: str, _: None = Depends(require_auth)):
     """Retorna les paraules de data/test.json amb la seva posició (o no trobada)."""
