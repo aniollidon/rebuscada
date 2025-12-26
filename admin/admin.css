@@ -1,6 +1,11 @@
 .rebuscada {
   color: #0d6efd;
 }
+
+.in-calendar {
+  background-color: #ecf5ff !important;
+}
+
 .word-item.moved {
   border-color: #ffd600 !important;
   box-shadow: 0 0 0 2px #ffe082;
@@ -91,7 +96,6 @@
   font-size: smaller;
 }
 .list-item.selected {
-  background: #e3f2fd;
   border-color: #1976d2;
   font-weight: 600;
 }
@@ -194,7 +198,7 @@
 }
 
 .menu-item.has-submenu::after {
-  content: '›';
+  content: "›";
   font-size: 18px;
   line-height: 1;
   margin-left: 10px;

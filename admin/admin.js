@@ -76,6 +76,7 @@ let regexModeActive = false; // estat del mode REGEX per a la cerca avançada
 let showOnlyPending = false; // filtre de fitxers no validats
 let showOnlyValidated = false; // filtre de fitxers validats
 let showOnlyFavorites = false; // filtre de fitxers preferits
+let showInCalendar = false; // filtre per mostrar fitxers ja assignats al calendari
 let autoSaveTimer = null; // temporitzador per auto-desat
 const AUTO_SAVE_DELAY = 800; // ms després de l'últim canvi de drag
 
@@ -208,7 +209,7 @@ function renderApp() {
         <div class="col-auto" style="width: 300px;">
           <div class="paper">
             <h5 class="mb-2">Fitxers</h5>
-              <div class="mb-2 small" style="display: flex; gap: 15px;">
+              <div class="mb-2 small" style="display: flex;gap: 0 15px;flex-wrap: wrap;">
               <div class="d-flex align-items-center gap-2">
                 <input type="checkbox" id="filter-pending" class="form-check-input" />
                 <label for="filter-pending" id="filter-pending-label" class="form-check-label" style="cursor:pointer;">Pendents</label>
@@ -220,6 +221,10 @@ function renderApp() {
               <div class="d-flex align-items-center gap-2">
                 <input type="checkbox" id="filter-favorites" class="form-check-input" />
                 <label for="filter-favorites" id="filter-favorites-label" class="form-check-label" style="cursor:pointer;">Preferits</label>
+              </div>
+              <div class="d-flex align-items-center gap-2">
+                <input type="checkbox" id="hide-in-calendar" class="form-check-input" />
+                <label for="hide-in-calendar" id="hide-in-calendar-label" class="form-check-label" style="cursor:pointer;">Mostra assignats</label>
               </div>
             </div>
             <div class="files-content">
@@ -358,6 +363,7 @@ function bindStaticEvents() {
   const filterChk = document.getElementById("filter-pending");
   const validatedChk = document.getElementById("filter-validated");
   const favoritesChk = document.getElementById("filter-favorites");
+  const hideInCalendarChk = document.getElementById("hide-in-calendar");
   const settingsBtn = document.getElementById("settings-btn");
   const calendarBtn = document.getElementById("calendar-btn");
   const difficultySelector = document.getElementById("difficulty-selector");
@@ -390,6 +396,13 @@ function bindStaticEvents() {
     favoritesChk.checked = showOnlyFavorites;
     favoritesChk.onchange = () => {
       showOnlyFavorites = favoritesChk.checked;
+      renderFileList();
+    };
+  }
+  if (hideInCalendarChk) {
+    hideInCalendarChk.checked = showInCalendar;
+    hideInCalendarChk.onchange = () => {
+      showInCalendar = hideInCalendarChk.checked;
       renderFileList();
     };
   }
@@ -835,6 +848,9 @@ async function saveCalendarGames() {
 
     // Recarrega el fitxer games.json del servidor per assegurar sincronització
     await loadCalendarGames();
+
+    // Actualitza la llista de fitxers per reflectir els canvis del calendari
+    renderFileList();
 
     alert("Calendari desat correctament!");
 
@@ -2129,11 +2145,17 @@ function renderFileList() {
     const validationStatus = validations[f] || "";
     const isValidated = !!validationStatus; // true if 'validated' or 'approved'
     const isFavorite = !!favorites[f];
+    const wordName = f.replace(".json", "");
+    const isInCalendar = calendarGames.some((g) => g.name === wordName);
     if (showOnlyPending && isValidated) return;
     if (showOnlyValidated && !isValidated) return;
     if (showOnlyFavorites && !isFavorite) return;
+    if (!showInCalendar && isInCalendar) return; // Oculta assignats per defecte
     const li = document.createElement("li");
-    li.className = "list-item" + (selected === f ? " selected" : "");
+    li.className =
+      "list-item" +
+      (selected === f ? " selected" : "") +
+      (isInCalendar ? " in-calendar" : "");
     // Nom del fitxer
     const span = document.createElement("span");
     span.style.flex = "1";
