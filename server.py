@@ -154,6 +154,20 @@ dicc_full = DiccionariFull(DICCIONARI_FULL_DB) if os.path.exists(DICCIONARI_FULL
 competitions: Dict[str, CompetitionState] = {}
 competition_connections: Dict[str, List[WebSocket]] = {}
 
+def obtenir_start_date() -> str:
+    """Obté la data d'inici des del fitxer date.json"""
+    date_path = Path("data/date.json")
+    if not date_path.exists():
+        logger.warning("date.json no trobat, utilitzant data per defecte")
+        return "15-11-2025"
+    try:
+        with open(date_path, encoding="utf-8") as f:
+            data = json.load(f)
+        return data.get("startDate", "15-11-2025")
+    except Exception as e:
+        logger.error(f"Error llegint date.json: {e}")
+        return "15-11-2025"
+
 # Funció de neteja de competicions caducades
 async def cleanup_expired_competitions():
     """Esborra competicions que no han tingut activitat en els últims N dies"""
@@ -242,7 +256,7 @@ def validar_joc_disponible(rebuscada: str):
             data = json.load(f)
         
         games = data.get("games", [])
-        start_date_str = data.get("startDate", "15-11-2025")
+        start_date_str = obtenir_start_date()
         
         # Calcular l'ID del joc actual
         start_date = datetime.strptime(start_date_str, "%d-%m-%Y").date()
@@ -946,7 +960,7 @@ async def get_rebuscada():
             data = json.load(f)
         
         games = data.get("games", [])
-        start_date_str = data.get("startDate", "15-11-2025")
+        start_date_str = obtenir_start_date()
         
         # Parseja la data d'inici
         start_date = datetime.strptime(start_date_str, "%d-%m-%Y").date()
@@ -1023,7 +1037,7 @@ async def get_public_games():
             data = json.load(f)
         
         from datetime import datetime
-        start_date_str = data.get("startDate", "15-11-2025")
+        start_date_str = obtenir_start_date()
         start_date = datetime.strptime(start_date_str, "%d-%m-%Y").date()
         today = datetime.now().date()
         
