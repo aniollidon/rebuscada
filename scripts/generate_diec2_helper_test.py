@@ -9,32 +9,75 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from scripts.extract_diec2_def import extract_diec2_definitions  # type: ignore
 from scripts.clean_txt import concepts_from_text, extract_keywords_rake  # type: ignore
-from proximitat import carregar_model_fasttext, calcular_similitud_cosinus
+from proximitatOpenAI import (
+    obtenir_client_openai,
+    carregar_cache_embeddings,
+    obtenir_embedding,
+    obtenir_embeddings_batch,
+    calcular_similitud_cosinus,
+    guardar_cache_embeddings
+)
 from diccionari import Diccionari
 
 IGNORED_CATEGORY_TEXTS = {"lèxic comú", "lèxic general", "léxic general"}
 
 
+def top_n_from_text_full(text: str,
+                         client,
+                         cache: Dict[str, List[float]],
+                         dicc_terms: List[str],
+                         n: int) -> List[str]:
+    """Compute top-N similar words using OpenAI embeddings of full text vs. dictionary words.
+    Uses the complete definition text without filtering.
+    """
+    if not text or not text.strip():
+        return []
+    
+    v_obj = obtenir_embedding(text, client, cache)
+    
+    # Obtenir embeddings del diccionari en batch per eficiència
+    embeddings_dict = obtenir_embeddings_batch(dicc_terms, client, cache)
+    
+    sims: List[Tuple[str, float]] = []
+    for w in dicc_terms:
+        if w in embeddings_dict:
+            v_w = embeddings_dict[w]
+            sims.append((w, calcular_similitud_cosinus(v_obj, v_w)))
+    sims.sort(key=lambda x: x[1], reverse=True)
+    return [w for w, _ in sims[:n]]
+
+
 def top_n_from_text_terms(terms: List[str],
-                          model,
+                          client,
+                          cache: Dict[str, List[float]],
                           dicc_terms: List[str],
                           n: int) -> List[str]:
-    """Compute top-N similar words using sentence vector of joined terms vs. dictionary words.
+    """Compute top-N similar words using OpenAI embeddings of joined terms vs. dictionary words.
     This mirrors generate_advanced's ranking intent for multi-term input.
     """
     if not terms:
         return []
     sent = " ".join(terms)
-    v_obj = model.get_sentence_vector(sent)
+    v_obj = obtenir_embedding(sent, client, cache)
+    
+    # Obtenir embeddings del diccionari en batch per eficiència
+    embeddings_dict = obtenir_embeddings_batch(dicc_terms, client, cache)
+    
     sims: List[Tuple[str, float]] = []
     for w in dicc_terms:
-        v_w = model.get_word_vector(w)
-        sims.append((w, calcular_similitud_cosinus(v_obj, v_w)))
+        if w in embeddings_dict:
+            v_w = embeddings_dict[w]
+            sims.append((w, calcular_similitud_cosinus(v_obj, v_w)))
     sims.sort(key=lambda x: x[1], reverse=True)
     return [w for w, _ in sims[:n]]
 
 
-def build_tests_for_definitions(entry: str, gen: int, model, dicc_terms: List[str], prefer_spacy: bool = True, include_categories: bool = False, use_rake: bool = False) -> Dict[str, Any]:
+def build_tests_for_definitions(entry: str, gen: int, client, cache: Dict[str, List[float]], dicc_terms: List[str], filter_mode: str = 'nofilter', include_categories: bool = False) -> Dict[str, Any]:
+    """Build test lists for definitions.
+    
+    Args:
+        filter_mode: 'nofilter' (text complet), 'spacy' (filtra amb spaCy), 'rake' (algoritme RAKE)
+    """
     defs = extract_diec2_definitions(entry)
 
     # Build definitions array with tests
@@ -44,12 +87,19 @@ def build_tests_for_definitions(entry: str, gen: int, model, dicc_terms: List[st
 
     for d in defs:
         text = d.get('text', '') or ''
-        if use_rake:
-            tokens = extract_keywords_rake(text)
-        else:
-            tokens = concepts_from_text(text, prefer_spacy=prefer_spacy, keep_case=True)
         
-        test_list = top_n_from_text_terms(tokens, model, dicc_terms, gen)
+        # Generar test segons mode de filtratge
+        if filter_mode == 'nofilter':
+            test_list = top_n_from_text_full(text, client, cache, dicc_terms, gen)
+        elif filter_mode == 'rake':
+            tokens = extract_keywords_rake(text)
+            test_list = top_n_from_text_terms(tokens, client, cache, dicc_terms, gen)
+        elif filter_mode == 'spacy':
+            tokens = concepts_from_text(text, prefer_spacy=True, keep_case=True)
+            test_list = top_n_from_text_terms(tokens, client, cache, dicc_terms, gen)
+        else:
+            raise ValueError(f"Mode de filtratge desconegut: {filter_mode}")
+        
         definitions.append({
             'text': text,
             'test': test_list,
@@ -79,11 +129,16 @@ def build_tests_for_definitions(entry: str, gen: int, model, dicc_terms: List[st
     if include_categories:
         categories: List[Dict[str, Any]] = []
         for cat_text in category_texts_order:
-            if use_rake:
+            if filter_mode == 'nofilter':
+                cat_test = top_n_from_text_full(cat_text, client, cache, dicc_terms, gen)
+            elif filter_mode == 'rake':
                 cat_tokens = extract_keywords_rake(cat_text)
+                cat_test = top_n_from_text_terms(cat_tokens, client, cache, dicc_terms, gen)
+            elif filter_mode == 'spacy':
+                cat_tokens = concepts_from_text(cat_text, prefer_spacy=True, keep_case=True)
+                cat_test = top_n_from_text_terms(cat_tokens, client, cache, dicc_terms, gen)
             else:
-                cat_tokens = concepts_from_text(cat_text, prefer_spacy=prefer_spacy, keep_case=True)
-            cat_test = top_n_from_text_terms(cat_tokens, model, dicc_terms, gen)
+                raise ValueError(f"Mode de filtratge desconegut: {filter_mode}")
             categories.append({'text': cat_text, 'test': cat_test})
         result['categories'] = categories
     return result
@@ -95,18 +150,19 @@ def main():
     parser.add_argument('--folder', type=str, help='Carpeta amb fitxers .json per processar')
     parser.add_argument('--gen', required=False, type=int, default=20, help='Nombre de paraules a generar per test')
     parser.add_argument('--freq-min', required=False, type=int, default=20, help='Freqüència mínima per filtrar diccionari')
-    parser.add_argument('--no-spacy', action='store_true', help='Desactiva spaCy i usa el mode de reserva lleuger')
+    parser.add_argument('--filter', type=str, choices=['nofilter', 'spacy', 'rake'], default='nofilter',
+                        help='Mode de filtratge: nofilter (text complet), spacy (filtra amb spaCy), rake (algoritme RAKE). Per defecte: nofilter')
     parser.add_argument('--categories', action='store_true', help='Inclou el tractament de categories DIEC2')
-    parser.add_argument('--rake', action='store_true', help='Utilitza l\'algoritme RAKE per extreure paraules clau')
     args = parser.parse_args()
 
     if not args.paraula and not args.folder:
         parser.error("Cal especificar --paraula o --folder")
 
-    print("Carregant diccionari i model...")
+    print("Carregant diccionari i client OpenAI...")
     dicc = Diccionari.obtenir_diccionari(freq_min=args.freq_min)
     dicc_terms = dicc.totes_les_lemes(freq_min=args.freq_min)
-    model = carregar_model_fasttext()
+    client = obtenir_client_openai()
+    cache = carregar_cache_embeddings()
     print("Recursos carregats.")
 
     words_to_process = []
@@ -128,7 +184,11 @@ def main():
     out_dir = os.path.join('data', 'words', 'deftests')
     os.makedirs(out_dir, exist_ok=True)
 
-    prefer_spacy = not args.no_spacy
+    filter_mode_names = {
+        'nofilter': 'text complet sense filtrar',
+        'spacy': 'filtratge amb spaCy',
+        'rake': 'algoritme RAKE'
+    }
 
     for word in words_to_process:
         out_path = os.path.join(out_dir, f"{word}.deftest.json")
@@ -137,22 +197,27 @@ def main():
             continue
 
         print(f"Processant: {word}")
-        print(f"Fent servir l'algorisme {'RAKE' if args.rake else 'normal'} per extreure conceptes.")
-        print(f"Utilitzant spaCy: {'sí' if prefer_spacy else 'no'}")
+        print(f"Mode de filtratge: {filter_mode_names[args.filter]}")
+        cache_inicial = len(cache)
         try:
             result = build_tests_for_definitions(
                 word,
                 args.gen,
-                model,
+                client,
+                cache,
                 dicc_terms,
-                prefer_spacy=prefer_spacy,
+                filter_mode=args.filter,
                 include_categories=args.categories,
-                use_rake=args.rake,
             )
             
             with open(out_path, 'w', encoding='utf-8') as f:
                 json.dump(result, f, ensure_ascii=False, indent=2)
             print(f"  Desat a {out_path}")
+            
+            # Guardar cache si s'han afegit noves paraules
+            if len(cache) > cache_inicial:
+                guardar_cache_embeddings(cache)
+                print(f"  Cache actualitzat amb {len(cache) - cache_inicial} nous embeddings")
         except Exception as e:
             print(f"  [ERROR] Error processant '{word}': {e}")
 

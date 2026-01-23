@@ -25,7 +25,7 @@ async function ensureAuthenticated() {
   if (adminToken) return true;
   const pwd = prompt(
     "Contrasenya admin (abans recorda recarregar la pàgina per tenir els últims canvis ctrl+R):",
-    ""
+    "",
   );
   if (pwd === null) return false;
   try {
@@ -490,7 +490,7 @@ function openSettingsModal() {
 
   // Obre el modal
   const settingsModal = new bootstrap.Modal(
-    document.getElementById("settingsModal")
+    document.getElementById("settingsModal"),
   );
   settingsModal.show();
 
@@ -526,7 +526,7 @@ function openSettingsModal() {
         alert(
           cleared !== null
             ? `Memòria cau netejada (${cleared} entrades)`
-            : "Memòria cau netejada"
+            : "Memòria cau netejada",
         );
       } catch (e) {
         alert(e.message || "Error desconegut netejant la cache");
@@ -550,7 +550,7 @@ function saveSettingsFromModal() {
 
   // Tanca el modal
   const settingsModal = bootstrap.Modal.getInstance(
-    document.getElementById("settingsModal")
+    document.getElementById("settingsModal"),
   );
   if (settingsModal) {
     settingsModal.hide();
@@ -612,7 +612,7 @@ function getFilteredWords() {
     words = words.filter(
       (w) =>
         validations[w + ".json"] === "validated" ||
-        validations[w + ".json"] === "approved"
+        validations[w + ".json"] === "approved",
     );
   }
 
@@ -660,8 +660,8 @@ function renderCalendarList() {
       const bgClass = isDuplicate
         ? "bg-warning bg-opacity-25"
         : isInvalid
-        ? "bg-danger bg-opacity-25"
-        : "";
+          ? "bg-danger bg-opacity-25"
+          : "";
 
       const gameDate = getGameDate(game.id);
       return `
@@ -725,7 +725,7 @@ function renderCalendarList() {
       const idx = parseInt(e.currentTarget.dataset.calIdx);
       if (
         confirm(
-          `Segur que vols eliminar la paraula ${calendarGames[idx].name}?`
+          `Segur que vols eliminar la paraula ${calendarGames[idx].name}?`,
         )
       ) {
         calendarGames.splice(idx, 1);
@@ -739,7 +739,7 @@ function renderCalendarList() {
   // Restaura el focus si hi havia
   if (focusedIdx !== null) {
     const newInput = container.querySelector(
-      `input[data-cal-idx="${focusedIdx}"]`
+      `input[data-cal-idx="${focusedIdx}"]`,
     );
     if (newInput) {
       newInput.focus();
@@ -784,7 +784,7 @@ async function openCalendarModal() {
 
   // Obre el modal
   const calendarModal = new bootstrap.Modal(
-    document.getElementById("calendarModal")
+    document.getElementById("calendarModal"),
   );
   calendarModal.show();
 
@@ -803,7 +803,7 @@ async function openCalendarModal() {
       // Posa focus al nou input
       setTimeout(() => {
         const newInput = document.querySelector(
-          `input[data-cal-idx="${newIdx}"]`
+          `input[data-cal-idx="${newIdx}"]`,
         );
         if (newInput) {
           newInput.focus();
@@ -829,7 +829,7 @@ async function saveCalendarGames() {
   const emptyWords = calendarGames.filter((g) => !g.name || !g.name.trim());
   if (emptyWords.length > 0) {
     alert(
-      `No es pot desar: hi ha ${emptyWords.length} paraula(es) buida(es). Emplena-les o elimina-les.`
+      `No es pot desar: hi ha ${emptyWords.length} paraula(es) buida(es). Emplena-les o elimina-les.`,
     );
     return;
   }
@@ -857,7 +857,7 @@ async function saveCalendarGames() {
 
     // Tanca el modal
     const calendarModal = bootstrap.Modal.getInstance(
-      document.getElementById("calendarModal")
+      document.getElementById("calendarModal"),
     );
     if (calendarModal) {
       calendarModal.hide();
@@ -871,7 +871,7 @@ async function saveCalendarGames() {
 async function addTestWordsPrompt() {
   const txt = prompt(
     "Paraules a afegir (separa per comes o salts de línia)",
-    ""
+    "",
   );
   if (txt === null) return;
   const parts = txt
@@ -910,9 +910,9 @@ async function addSynonymsTestPrompt() {
     // Obté els sinònims de la paraula
     const res = await fetch(
       `${RANKINGS_API}/${selected}/test-words-synonyms-custom/${encodeURIComponent(
-        wordTrimmed
+        wordTrimmed,
       )}`,
-      { headers: { ...authHeaders() } }
+      { headers: { ...authHeaders() } },
     );
 
     if (!res.ok) {
@@ -1168,7 +1168,7 @@ async function getCurrentRanking() {
       `${RANKINGS_API}/${selected}?offset=0&limit=999999`,
       {
         headers: { ...authHeaders() },
-      }
+      },
     );
     if (!res.ok) return null;
     const data = await res.json();
@@ -1364,8 +1364,8 @@ function renderTestTabs(commonData, aiData, synonymsData, overlay, dtData) {
             <button class="test-word-menu-btn" data-word="${
               w.word
             }" data-pos="${
-          w.pos
-        }" title="Més opcions" style="border: none; background: transparent; cursor: pointer; padding: 2px 4px; font-size: 12px; color: #666;">⋮</button>
+              w.pos
+            }" title="Més opcions" style="border: none; background: transparent; cursor: pointer; padding: 2px 4px; font-size: 12px; color: #666;">⋮</button>
           </div>
         </div>`;
       }
@@ -1389,8 +1389,8 @@ function renderTestTabs(commonData, aiData, synonymsData, overlay, dtData) {
               <button class="test-word-menu-btn" data-word="${
                 w.word
               }" data-pos="${
-            w.pos
-          }" title="Més opcions" style="border: none; background: transparent; cursor: pointer; padding: 2px 4px; font-size: 12px; color: #666;">⋮</button>
+                w.pos
+              }" title="Més opcions" style="border: none; background: transparent; cursor: pointer; padding: 2px 4px; font-size: 12px; color: #666;">⋮</button>
             </div>
           </div>`;
         }
@@ -1420,8 +1420,8 @@ function renderTestTabs(commonData, aiData, synonymsData, overlay, dtData) {
                     <button class="test-word-menu-btn" data-word="${
                       w.word
                     }" data-pos="${
-                  w.pos
-                }" title="Més opcions" style="border: none; background: transparent; cursor: pointer; padding: 2px 4px; font-size: 12px; color: #666;">⋮</button>
+                      w.pos
+                    }" title="Més opcions" style="border: none; background: transparent; cursor: pointer; padding: 2px 4px; font-size: 12px; color: #666;">⋮</button>
                   </div>
                 </div>`;
               }
@@ -1468,8 +1468,8 @@ function renderTestTabs(commonData, aiData, synonymsData, overlay, dtData) {
                   <button class="test-word-menu-btn" data-word="${
                     w.word
                   }" data-pos="${
-                w.pos
-              }" title="Més opcions" style="border: none; background: transparent; cursor: pointer; padding: 2px 4px; font-size: 12px; color: #666;">⋮</button>
+                    w.pos
+                  }" title="Més opcions" style="border: none; background: transparent; cursor: pointer; padding: 2px 4px; font-size: 12px; color: #666;">⋮</button>
                 </div>
               </div>`;
             }
@@ -1508,8 +1508,8 @@ function renderTestTabs(commonData, aiData, synonymsData, overlay, dtData) {
               <button class="test-word-menu-btn" data-word="${
                 w.word
               }" data-pos="${
-            w.pos
-          }" title="Més opcions" style="border: none; background: transparent; cursor: pointer; padding: 2px 4px; font-size: 12px; color: #666;">⋮</button>
+                w.pos
+              }" title="Més opcions" style="border: none; background: transparent; cursor: pointer; padding: 2px 4px; font-size: 12px; color: #666;">⋮</button>
             </div>
           </div>`;
         }
@@ -1534,8 +1534,8 @@ function renderTestTabs(commonData, aiData, synonymsData, overlay, dtData) {
             <button class="test-word-menu-btn" data-word="${
               w.word
             }" data-pos="${
-          w.pos
-        }" title="Més opcions" style="border: none; background: transparent; cursor: pointer; padding: 2px 4px; font-size: 12px; color: #666;">⋮</button>
+              w.pos
+            }" title="Més opcions" style="border: none; background: transparent; cursor: pointer; padding: 2px 4px; font-size: 12px; color: #666;">⋮</button>
           </div>
         </div>`;
       })
@@ -1589,8 +1589,8 @@ function renderTestTabs(commonData, aiData, synonymsData, overlay, dtData) {
                       <button class="test-word-menu-btn" data-word="${
                         w.word
                       }" data-pos="${
-                    w.pos
-                  }" title="Més opcions" style="border: none; background: transparent; cursor: pointer; padding: 2px 4px; font-size: 12px; color: #666;">⋮</button>
+                        w.pos
+                      }" title="Més opcions" style="border: none; background: transparent; cursor: pointer; padding: 2px 4px; font-size: 12px; color: #666;">⋮</button>
                     </div>
                   </div>`;
                 }
@@ -1626,8 +1626,8 @@ function renderTestTabs(commonData, aiData, synonymsData, overlay, dtData) {
     <div id="test-search-content" class="test-tab-content" style="display:none;">
       <div style="font-size: 11px;color: #666;margin-bottom: 8px;">
         Cerca: <strong>${searchResultsData.query}</strong> (${
-            searchResultsData.is_regex ? "REGEX" : "conté"
-          }) - ${searchResultsData.count} resultats
+          searchResultsData.is_regex ? "REGEX" : "conté"
+        }) - ${searchResultsData.count} resultats
       </div>
       <div class="test-body-search" id="test-body-search" style="font-size:13px;display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:4px;">${searchRows}</div>
     </div>`
@@ -1656,7 +1656,7 @@ function renderTestTabs(commonData, aiData, synonymsData, overlay, dtData) {
           e,
           w,
           (wordsByPos[w] && wordsByPos[w].pos) || null,
-          btn
+          btn,
         );
       });
     });
@@ -1765,7 +1765,7 @@ window.switchTestTab = function (tabName) {
   const overlay = document.getElementById("test-overlay");
   if (overlay) {
     const activeBtn = document.querySelector(
-      "#test-overlay .btn-group button.active"
+      "#test-overlay .btn-group button.active",
     );
     let currentTab = testState.activeTab;
     if (activeBtn) {
@@ -1857,7 +1857,7 @@ function attemptOverlayScroll(desired, attempt = 1) {
     if (hasContent || attempt < 10) {
       setTimeout(
         () => attemptOverlayScroll(desired, attempt + 1),
-        TEST_SCROLL_RESTORE_INTERVAL
+        TEST_SCROLL_RESTORE_INTERVAL,
       );
     }
   }
@@ -1868,7 +1868,7 @@ function saveTestState() {
   if (!testVisible) return;
   const overlay = document.getElementById("test-overlay");
   const activeTabBtn = document.querySelector(
-    "#test-overlay .btn-group button.active"
+    "#test-overlay .btn-group button.active",
   );
   if (activeTabBtn) {
     const tabId = activeTabBtn.id;
@@ -1924,7 +1924,7 @@ function refreshTestOverlayIfVisible(desiredActiveTab) {
     // Petit delay per assegurar que el DOM està completament renderitzat
     setTimeout(() => {
       restoreTestState(
-        desiredActiveTab ? testState.scrollPositions[chosenActive] : prevScroll
+        desiredActiveTab ? testState.scrollPositions[chosenActive] : prevScroll,
       );
     }, 10);
   });
@@ -1938,11 +1938,11 @@ function updateTestWordAttributes(word, newPos) {
 
   const rows = Array.from(
     overlay.querySelectorAll(
-      ".test-row[data-word], .test-row-ai[data-word], .test-row-synonyms[data-word], .test-row-search[data-word]"
-    )
+      ".test-row[data-word], .test-row-ai[data-word], .test-row-synonyms[data-word], .test-row-search[data-word]",
+    ),
   ).filter(
     (el) =>
-      (el.getAttribute("data-word") || "").toLowerCase() === word.toLowerCase()
+      (el.getAttribute("data-word") || "").toLowerCase() === word.toLowerCase(),
   );
 
   if (!rows.length) {
@@ -2010,8 +2010,8 @@ function updateTestWordAttributes(word, newPos) {
     const clsTestRow = row.classList.contains("test-row")
       ? "test-row"
       : row.classList.contains("test-row-ai")
-      ? "test-row-ai"
-      : "test-row-synonyms";
+        ? "test-row-ai"
+        : "test-row-synonyms";
     const w = row.getAttribute("data-word");
     if (newPos !== null && newPos !== undefined) {
       // estat TROBADA
@@ -2053,7 +2053,7 @@ function initTestWordSelection() {
     if (!selectedTestWords.size) return;
     if (
       !confirm(
-        `Eliminar ${selectedTestWords.size} paraules del test? s'esborraran per totes les paraules`
+        `Eliminar ${selectedTestWords.size} paraules del test? s'esborraran per totes les paraules`,
       )
     )
       return;
@@ -2119,7 +2119,7 @@ function fetchFiles() {
   // Carrega llistat, validacions, preferits i dificultats en paral·lel
   Promise.all([
     fetch(RANKINGS_API, { headers: { ...authHeaders() } }).then((r) =>
-      r.json()
+      r.json(),
     ),
     fetch(VALIDATIONS_API, {
       headers: { ...authHeaders() },
@@ -2169,8 +2169,8 @@ function renderFileList() {
       <input type="checkbox" class="form-check-input me-2 validate-chk ${
         valState.className
       }" id="${chkId}" ${valState.checked ? "checked" : ""} title="${
-      valState.title
-    }" />
+        valState.title
+      }" />
       <button class="star-btn ${
         isFavorite ? "favorite" : ""
       }" id="${starId}" title="Marca com a preferit" type="button">
@@ -2260,7 +2260,7 @@ function renderFileList() {
       e.stopPropagation();
       // Extreu la paraula sense l'extensió .json i la codifica en Base64
       const word = f.replace(/\.json$/, "");
-      const wordBase64 = btoa(word);
+      const wordBase64 = btoa(encodeURIComponent(word));
       const gameUrl = `https://rebuscada.cat/?word=${wordBase64}`;
       window.open(gameUrl, "_blank", "noopener");
     };
@@ -2525,7 +2525,7 @@ async function deleteComment(isGlobal, word) {
       endpoint = `${RANKINGS_API}/${selected}/comments/global`;
     } else {
       endpoint = `${RANKINGS_API}/${selected}/comments/word/${encodeURIComponent(
-        word
+        word,
       )}`;
     }
 
@@ -2929,7 +2929,7 @@ async function refreshLoadedAfter(startPos) {
     try {
       const res = await fetch(
         `${RANKINGS_API}/${selected}?offset=${a}&limit=${len}`,
-        { headers: { ...authHeaders() } }
+        { headers: { ...authHeaders() } },
       );
       const data = await res.json();
       if (data.words) data.words.forEach((w) => (wordsByPos[w.pos] = w));
@@ -3031,7 +3031,8 @@ function showTestWordMenu(e, word, pos, btn) {
     return targets
       .filter((t) => total > t)
       .map(
-        (t) => `<div class="menu-item quick-move" data-target="${t}">${t}</div>`
+        (t) =>
+          `<div class="menu-item quick-move" data-target="${t}">${t}</div>`,
       )
       .join("");
   };
@@ -3085,7 +3086,7 @@ function showTestWordMenu(e, word, pos, btn) {
 
     const newPosStr = prompt(
       `Mou "${word}" a quina posició? (actual: ${pos})`,
-      ""
+      "",
     );
     if (newPosStr === null) return;
     const newPos = parseInt(newPosStr, 10);
@@ -3161,7 +3162,7 @@ function showTestWordMenu(e, word, pos, btn) {
     closeMenu();
     const url = DICT_URL_TEMPLATE.replace(
       "[PARAULA]",
-      encodeURIComponent(word)
+      encodeURIComponent(word),
     );
     window.open(url, "_blank", "noopener");
   };
@@ -3234,7 +3235,8 @@ function showMenu(e, pos) {
     return targets
       .filter((t) => total > t)
       .map(
-        (t) => `<div class="menu-item quick-move" data-target="${t}">${t}</div>`
+        (t) =>
+          `<div class="menu-item quick-move" data-target="${t}">${t}</div>`,
       )
       .join("");
   };
@@ -3326,7 +3328,7 @@ function showMenu(e, pos) {
         if (wObj && wObj.word) {
           const url = DICT_URL_TEMPLATE.replace(
             "[PARAULA]",
-            encodeURIComponent(wObj.word)
+            encodeURIComponent(wObj.word),
           );
           window.open(url, "_blank", "noopener");
         }
@@ -3388,7 +3390,7 @@ async function handleMoveToPrompt() {
   const absoluteFrom = menuIdx;
   let posStr = prompt(
     `A quina posició vols moure aquesta paraula? (0 - ${total - 1})`,
-    ""
+    "",
   );
   if (posStr === null) return closeMenu();
   let target = parseInt(posStr, 10);
@@ -3516,7 +3518,7 @@ async function reloadInitialBlock() {
     `${RANKINGS_API}/${selected}?offset=0&limit=${PAGE_SIZE}`,
     {
       headers: { ...authHeaders() },
-    }
+    },
   );
   const data = await res.json();
   // REFRESH PARCIAL: Només actualitzem el primer bloc (0..PAGE_SIZE-1)
@@ -3585,7 +3587,7 @@ async function ensureVisible(pos, options = {}) {
 function createFile() {
   const paraula = prompt(
     "Paraula per generar rànquing (pot tardar una estona):",
-    ""
+    "",
   );
   if (paraula === null) return; // cancel·lat
 
@@ -3620,7 +3622,7 @@ function createFile() {
 function createRandom() {
   if (
     !confirm(
-      "Generar 10 rànquings pot trigar força (fastText). Vols continuar?"
+      "Generar 10 rànquings pot trigar força (fastText). Vols continuar?",
     )
   )
     return;
@@ -3863,9 +3865,9 @@ async function triggerAdvancedSearch(term) {
   try {
     const response = await fetch(
       `${RANKINGS_API}/${selected}/search?query=${encodeURIComponent(
-        t
+        t,
       )}&is_regex=${isRegex}`,
-      { headers: { ...authHeaders() } }
+      { headers: { ...authHeaders() } },
     );
 
     if (!response.ok) {
@@ -3906,7 +3908,7 @@ async function promptAddNewWord() {
   if (!selected) return alert("Cal seleccionar un rànquing");
   const raw = prompt(
     "Escriu la paraula (nom o verb en forma canònica, sense flexió).\nAbans d'afegir recorda: només lemes (ex: 'anar', 'casa', no 'anant', 'cases').",
-    ""
+    "",
   );
   if (raw === null) return; // cancel·lat
   const word = (raw || "").trim().toLowerCase();
@@ -3918,7 +3920,7 @@ async function promptAddNewWord() {
       `${API_BASE}/lemma-info/${encodeURIComponent(word)}`,
       {
         headers: { ...authHeaders() },
-      }
+      },
     );
     if (r.ok) lemmaInfo = await r.json();
   } catch (_) {}
@@ -3968,8 +3970,8 @@ async function promptAddNewWord() {
         (data.is_inflection
           ? `\nNota: sembla flexió del lema '${data.lemma}'.`
           : data.lemma
-          ? "\nConfirmat com a lema."
-          : "")
+            ? "\nConfirmat com a lema."
+            : ""),
     );
   } catch (e) {
     alert("Error de xarxa");
