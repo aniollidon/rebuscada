@@ -262,6 +262,7 @@ function renderApp() {
               <button class="btn btn-outline-primary" id="search-plus-btn" type="button" title="Cerca avançada (conté text o regex)">Cerca+</button>
               <button class="btn btn-outline-success" id="add-new-word-btn" type="button" title="Afegeix una paraula nova al rànquing">+Nova</button>
               <button class="btn btn-outline-info" id="show-test" type="button" title="Mostra paraules test">Test</button>
+              <button class="btn btn-outline-warning" id="show-ia-shortcuts" type="button" title="Dreçeres IA per tests personalitzats">IA</button>
             </div>
             <div id="words-area" style="min-height:79vh"></div>
           </div>
@@ -432,6 +433,8 @@ function bindStaticEvents() {
 
   if (testBtn) testBtn.onclick = toggleTestOverlay;
   if (addNewBtn) addNewBtn.onclick = promptAddNewWord;
+  const iaShortcutsBtn = document.getElementById("show-ia-shortcuts");
+  if (iaShortcutsBtn) iaShortcutsBtn.onclick = openIAShortcutsModal;
   if (settingsBtn) settingsBtn.onclick = openSettingsModal;
   if (calendarBtn) calendarBtn.onclick = openCalendarModal;
 
@@ -1054,8 +1057,14 @@ function openCustomTextTestModal() {
     };
 
     modal.hide();
-    // Refresca la vista del test i obre la pestanya del test acabat de crear
-    refreshTestOverlayIfVisible("text");
+    // Mostra la vista del test si no és visible i obre la pestanya del test personalitzat
+    if (!testVisible) {
+      testVisible = true;
+      testState.activeTab = "text";
+      await loadTestOverlayData();
+    } else {
+      refreshTestOverlayIfVisible("text");
+    }
   };
 
   // Botó per obrir el modal de cerca AI
@@ -1069,6 +1078,246 @@ function openCustomTextTestModal() {
   });
 
   modal.show();
+}
+
+// Modal de dreçeres IA per test personalitzat
+function openIAShortcutsModal() {
+  if (!selected) return;
+
+  // Obtenim la paraula seleccionada (posició 0 del rànquing)
+  const baseWord = wordsByPos[0] ? wordsByPos[0].word : "";
+
+  const modalHtml = `
+    <div class="modal fade" id="iaShortcutsModal" tabindex="-1" aria-labelledby="iaShortcutsModalLabel" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="iaShortcutsModalLabel">Dreçeres IA - Test Personalitzat</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tanca"></button>
+          </div>
+          <div class="modal-body">
+            <p class="text-muted small mb-3">Selecciona una opció per generar un prompt preparat per a la cerca IA.</p>
+            <div class="d-grid gap-2">
+              <button type="button" class="btn btn-outline-primary text-start" id="ia-100-similars">
+                <strong>100 paraules similars</strong>
+                <br><small class="text-muted">Genera 100 noms i verbs relacionats amb el concepte</small>
+              </button>
+              <button type="button" class="btn btn-outline-primary text-start" id="ia-eliminar-dissimilars">
+                <strong>Eliminar dissimilars (300 primers)</strong>
+                <br><small class="text-muted">Escull les 50 paraules menys relacionades del rànquing</small>
+              </button>
+              <button type="button" class="btn btn-outline-primary text-start" id="ia-sin-ant-hiper-hipo">
+                <strong>SIN/ANT/HIPER/HIPO</strong>
+                <br><small class="text-muted">Sinònims, antònims, hiperònims i hipònims</small>
+              </button>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel·la</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Elimina modal anterior si existeix
+  const oldModal = document.getElementById("iaShortcutsModal");
+  if (oldModal) oldModal.remove();
+
+  // Afegeix modal al DOM
+  document.body.insertAdjacentHTML("beforeend", modalHtml);
+
+  const modalEl = document.getElementById("iaShortcutsModal");
+  const modal = new bootstrap.Modal(modalEl);
+
+  // Event per "100 paraules similars"
+  document.getElementById("ia-100-similars").onclick = () => {
+    const prompt = `Genera una llista de 100 noms i verbs únics en català relacionades amb el concepte de ${baseWord}`;
+    modal.hide();
+    openIAShortcutWithPrompt(prompt);
+  };
+
+  // Event per "Eliminar dissimilars (300 primers)"
+  document.getElementById("ia-eliminar-dissimilars").onclick = async () => {
+    // Obtenim els primers 300 del rànquing
+    const first300 = [];
+    for (let i = 0; i < 300; i++) {
+      if (wordsByPos[i] && wordsByPos[i].word) {
+        first300.push(wordsByPos[i].word);
+      }
+    }
+
+    if (first300.length === 0) {
+      alert(
+        "No hi ha prou paraules carregades al rànquing. Carrega més dades primer.",
+      );
+      return;
+    }
+
+    const llistaParaules = first300.join(", ");
+    const prompt = `De la següent llista escull les 50 paraules semànticament menys relacionades amb la paraula ${baseWord}: \n${llistaParaules}`;
+    modal.hide();
+    openIAShortcutWithPrompt(prompt);
+  };
+
+  // Event per "SIN/ANT/HIPER/HIPO"
+  document.getElementById("ia-sin-ant-hiper-hipo").onclick = () => {
+    const prompt = `Fes una llista de paraules del diccionari català que siguin sinònims, antònims, hiperònims o hipònims de la paraula "${baseWord}". Usa paraules simples (no compostes). Només mostra les paraules.`;
+    modal.hide();
+    openIAShortcutWithPrompt(prompt);
+  };
+
+  // Neteja el modal del DOM quan es tanca
+  modalEl.addEventListener("hidden.bs.modal", () => {
+    modalEl.remove();
+  });
+
+  modal.show();
+}
+
+// Obre el modal de test personalitzat amb un prompt preparat per IA
+function openIAShortcutWithPrompt(preparedPrompt) {
+  if (!selected) return;
+
+  const modalHtml = `
+    <div class="modal fade" id="customTextModal" tabindex="-1" aria-labelledby="customTextModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="customTextModalLabel">Test Personalitzat - Enganxa text</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tanca"></button>
+          </div>
+          <div class="modal-body">
+            <p class="text-muted small">Enganxa text (es netejaran automàticament els caràcters no vàlids). Fes una línia per cada paraula.</p>
+            <p class="text-muted small"> Pots utilitzar aquest prompt: "llista 500 paraules úniques relacionades semànticament amb la paraula <b>PARAULA</b>. (només paraules simples singulars). Mostra el resultat en un bloc de codi."</p>
+            <textarea class="form-control" id="custom-text-textarea" rows="15" placeholder="Enganxa aquí el text d'internet..."></textarea>
+            <div class="mt-2">
+              <small class="text-muted">Paraules: <span id="word-count">0</span></small>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel·la</button>
+            <button type="button" class="btn btn-outline-primary" id="open-ai-search-btn">Cerca AI</button>
+            <button type="button" class="btn btn-primary" id="create-custom-test-btn">Crear Test</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Elimina modal anterior si existeix
+  const oldModal = document.getElementById("customTextModal");
+  if (oldModal) oldModal.remove();
+
+  // Afegeix modal al DOM
+  document.body.insertAdjacentHTML("beforeend", modalHtml);
+
+  const modalEl = document.getElementById("customTextModal");
+  const modal = new bootstrap.Modal(modalEl);
+  const textarea = document.getElementById("custom-text-textarea");
+  const wordCountSpan = document.getElementById("word-count");
+
+  // Event per netejar text automàticament quan canvia
+  textarea.addEventListener("input", (e) => {
+    const cursorPos = textarea.selectionStart;
+    const textBefore = textarea.value.substring(0, cursorPos);
+    const textAfter = textarea.value.substring(cursorPos);
+
+    // Converteix comes en salts de línia
+    let cleaned = textarea.value.replace(/,|;/g, "\n");
+
+    // Neteja el text: manté només lletres catalanes i salts de línia
+    cleaned = cleaned.replace(/[^a-zA-ZàèéíòóúÀÈÉÍÒÓÚïüÏÜçÇ·\s\n]/g, "");
+
+    // Converteix múltiples salts de línia en un de sol
+    cleaned = cleaned.replace(/\n{2,}/g, "\n");
+
+    // Converteix espais múltiples en un de sol
+    cleaned = cleaned.replace(/[ \t]+/g, " ");
+
+    // Aplica el text netejat
+    textarea.value = cleaned;
+
+    // Calcula la nova posició del cursor després de netejar
+    const cleanedBefore = textBefore
+      .replace(/,/g, "\n")
+      .replace(/[^a-zA-ZàèéíòóúÀÈÉÍÒÓÚïüÏÜçÇ·\s\n]/g, "")
+      .replace(/\n{2,}/g, "\n")
+      .replace(/[ \t]+/g, " ");
+    const newCursorPos = cleanedBefore.length;
+
+    // Restaura la posició del cursor
+    textarea.setSelectionRange(newCursorPos, newCursorPos);
+
+    // Actualitza contador de paraules
+    const wordCount = cleaned
+      ? cleaned.split("\n").filter((l) => l.trim()).length
+      : 0;
+    wordCountSpan.textContent = wordCount;
+  });
+
+  // Event per crear test
+  document.getElementById("create-custom-test-btn").onclick = async () => {
+    const text = textarea.value.trim();
+    if (!text) {
+      alert("El text està buit");
+      return;
+    }
+
+    const words = text.split("\n").filter((w) => w.trim());
+    if (words.length === 0) {
+      alert("No hi ha paraules vàlides");
+      return;
+    }
+
+    // Processa les paraules amb el rànquing actual
+    const ranking = await getCurrentRanking();
+    if (!ranking) {
+      alert("Error carregant el rànquing");
+      return;
+    }
+
+    const processedWords = words.map((word) => {
+      const wordLower = word.toLowerCase().trim();
+      if (wordLower in ranking) {
+        return { word: word, found: true, pos: ranking[wordLower] };
+      } else {
+        return { word: word, found: false };
+      }
+    });
+
+    customTextData = {
+      words: processedWords,
+      count: processedWords.length,
+    };
+
+    modal.hide();
+    // Mostra la vista del test si no és visible i obre la pestanya del test personalitzat
+    if (!testVisible) {
+      testVisible = true;
+      testState.activeTab = "text";
+      await loadTestOverlayData();
+    } else {
+      refreshTestOverlayIfVisible("text");
+    }
+  };
+
+  // Botó per obrir el modal de cerca AI
+  document.getElementById("open-ai-search-btn").onclick = () => {
+    openAiSearchModal(textarea);
+  };
+
+  // Neteja el modal del DOM quan es tanca
+  modalEl.addEventListener("hidden.bs.modal", () => {
+    modalEl.remove();
+  });
+
+  modal.show();
+
+  // Obre el modal de cerca AI amb el prompt preparat després que s'hagi mostrat el modal base
+  setTimeout(() => {
+    openAiSearchModalWithPrompt(textarea, preparedPrompt);
+  }, 300);
 }
 
 // Modal flotant per fer una cerca AI i omplir el textarea del test personalitzat
@@ -1092,7 +1341,7 @@ function openAiSearchModal(targetTextarea) {
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tanca</button>
-            <button type="button" class="btn btn-primary" id="ai-send-btn">ENVIA</button>
+            <button type="button" class="btn btn-primary" id="ai-send-btn">Executa</button>
           </div>
         </div>
       </div>
@@ -1153,6 +1402,91 @@ function openAiSearchModal(targetTextarea) {
       sending = false;
       sendBtn.disabled = false;
       sendBtn.textContent = "ENVIA";
+    }
+  };
+
+  aiEl.addEventListener("hidden.bs.modal", () => aiEl.remove());
+  aiModal.show();
+}
+
+// Modal flotant per fer una cerca AI amb prompt preparat (per dreçeres IA)
+function openAiSearchModalWithPrompt(targetTextarea, preparedPrompt) {
+  const aiModalHtml = `
+    <div class="modal fade" id="aiSearchModal" tabindex="-1" aria-labelledby="aiSearchModalLabel" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="aiSearchModalLabel">Cerca AI</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tanca"></button>
+          </div>
+          <div class="modal-body">
+            <label class="form-label">Prompt</label>
+            <textarea class="form-control" id="ai-prompt-input" rows="6">${preparedPrompt}</textarea>
+            <div class="form-text">Pots editar el prompt abans d'enviar.</div>
+            <div id="ai-error" class="text-danger mt-2" style="display:none;"></div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tanca</button>
+            <button type="button" class="btn btn-primary" id="ai-send-btn">Executa</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+  // Elimina si existeix
+  const old = document.getElementById("aiSearchModal");
+  if (old) old.remove();
+  document.body.insertAdjacentHTML("beforeend", aiModalHtml);
+
+  const aiEl = document.getElementById("aiSearchModal");
+  const aiModal = new bootstrap.Modal(aiEl);
+  const promptEl = document.getElementById("ai-prompt-input");
+  const errorEl = document.getElementById("ai-error");
+  const sendBtn = document.getElementById("ai-send-btn");
+
+  let sending = false;
+  sendBtn.onclick = async () => {
+    if (sending) return;
+    const prompt = (promptEl.value || "").trim();
+    errorEl.style.display = "none";
+    errorEl.textContent = "";
+
+    if (!prompt) {
+      errorEl.textContent = "El prompt no pot estar buit.";
+      errorEl.style.display = "block";
+      return;
+    }
+
+    try {
+      sending = true;
+      sendBtn.disabled = true;
+      sendBtn.textContent = "Enviant...";
+      const res = await fetch(AI_GENERATE_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ prompt }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: "Error" }));
+        throw new Error(err.detail || "Error en la generació AI");
+      }
+      const data = await res.json();
+      const words = Array.isArray(data.paraules) ? data.paraules : [];
+      if (!words.length) throw new Error("La resposta AI no conté paraules");
+
+      // Omple el textarea amb les paraules (una per línia) i neteja qualsevol contingut anterior
+      targetTextarea.value = words.join("\n");
+      // Força l'actualització del comptador i la neteja
+      targetTextarea.dispatchEvent(new Event("input"));
+
+      aiModal.hide();
+    } catch (e) {
+      errorEl.textContent = e.message || "Error desconegut";
+      errorEl.style.display = "block";
+    } finally {
+      sending = false;
+      sendBtn.disabled = false;
+      sendBtn.textContent = "Executa";
     }
   };
 
