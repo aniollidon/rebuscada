@@ -1062,6 +1062,8 @@ function openCustomTextTestModal() {
       testVisible = true;
       testState.activeTab = "text";
       await loadTestOverlayData();
+      // Canvia a la pestanya de text personalitzat
+      setTimeout(() => switchTestTab("text"), 50);
     } else {
       refreshTestOverlayIfVisible("text");
     }
@@ -1297,6 +1299,8 @@ function openIAShortcutWithPrompt(preparedPrompt) {
       testVisible = true;
       testState.activeTab = "text";
       await loadTestOverlayData();
+      // Canvia a la pestanya de text personalitzat
+      setTimeout(() => switchTestTab("text"), 50);
     } else {
       refreshTestOverlayIfVisible("text");
     }
