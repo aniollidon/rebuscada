@@ -129,7 +129,7 @@ async def startup_event():
 
 # Configurar CORS
 # En producció només permetre rebuscada.cat, en desenvolupament també localhost
-ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "https://rebuscada.cat,http://localhost:3000").split(",")
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "https://rebuscada.cat, https://www.rebuscada.cat,http://localhost:3000").split(",")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
