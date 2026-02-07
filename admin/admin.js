@@ -580,16 +580,25 @@ async function loadCalendarGames() {
   }
 }
 
-// Funció per calcular la data d'un joc segons el seu ID
+// Funció per calcular la data d'un joc segons el seu ID (usant camp 'dies' acumulat)
 function getGameDate(gameId) {
   try {
     // Format de startDate: DD-MM-YYYY
     const [day, month, year] = calendarStartDate.split("-").map(Number);
     const startDate = new Date(year, month - 1, day);
 
-    // Afegir (gameId - 1) dies a la data d'inici
+    // Calcular dies acumulats fins al joc anterior
+    const sortedGames = [...calendarGames].sort((a, b) => a.id - b.id);
+    let cumulativeDays = 0;
+    for (const game of sortedGames) {
+      if (game.id === gameId) {
+        break;
+      }
+      cumulativeDays += game.dies || 1;
+    }
+
     const gameDate = new Date(startDate);
-    gameDate.setDate(startDate.getDate() + (gameId - 1));
+    gameDate.setDate(startDate.getDate() + cumulativeDays);
 
     // Formatar com DD-MM-YYYY
     const d = String(gameDate.getDate()).padStart(2, "0");
@@ -667,10 +676,16 @@ function renderCalendarList() {
           : "";
 
       const gameDate = getGameDate(game.id);
+      const dies = game.dies || 1;
+      const diesBadge =
+        dies === 7
+          ? '<span class="badge bg-info text-dark" style="font-size: 10px; padding: 2px 4px;" title="Setmanal (7 dies)">7d</span>'
+          : '<span class="badge bg-secondary" style="font-size: 10px; padding: 2px 4px;" title="Diari (1 dia)">1d</span>';
       return `
       <div class="d-flex align-items-center gap-2 mb-2 p-2 border rounded ${bgClass}" data-cal-idx="${idx}">
         <span class="text-muted" style="min-width: 40px;">${game.id}.</span>
         <span class="text-muted" style="min-width: 90px; font-size: 11px;">${gameDate}</span>
+        ${diesBadge}
         <input type="text" 
                class="form-control form-control-sm calendar-word-input" 
                data-cal-idx="${idx}"
@@ -680,6 +695,10 @@ function renderCalendarList() {
         <datalist id="words-datalist-${idx}">
           ${availableWords.map((w) => `<option value="${w}">`).join("")}
         </datalist>
+        <select class="form-select form-select-sm calendar-dies-select" data-cal-idx="${idx}" style="width: 60px; min-width: 60px;" title="Durada del joc en dies">
+          <option value="1" ${dies === 1 ? "selected" : ""}>1d</option>
+          <option value="7" ${dies === 7 ? "selected" : ""}>7d</option>
+        </select>
         ${
           isDuplicate
             ? '<small class="text-warning ms-1" title="Paraula repetida: aquesta paraula ja apareix a la llista"><i class="bi bi-exclamation-triangle"></i></small>'
@@ -723,6 +742,16 @@ function renderCalendarList() {
     });
   });
 
+  // Bind events per selector de dies
+  container.querySelectorAll(".calendar-dies-select").forEach((select) => {
+    select.addEventListener("change", (e) => {
+      const idx = parseInt(e.target.dataset.calIdx);
+      calendarGames[idx].dies = parseInt(e.target.value);
+      // Re-renderitzar per actualitzar les dates
+      renderCalendarList();
+    });
+  });
+
   container.querySelectorAll(".calendar-remove-btn").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       const idx = parseInt(e.currentTarget.dataset.calIdx);
@@ -732,7 +761,7 @@ function renderCalendarList() {
         )
       ) {
         calendarGames.splice(idx, 1);
-        // Reassigna IDs
+        // Reassigna IDs (preservant 'dies')
         calendarGames.forEach((g, i) => (g.id = i + 1));
         renderCalendarList();
       }
@@ -800,7 +829,7 @@ async function openCalendarModal() {
           ? Math.max(...calendarGames.map((g) => g.id)) + 1
           : 1;
       const newIdx = calendarGames.length;
-      calendarGames.push({ id: newId, name: "" });
+      calendarGames.push({ id: newId, name: "", dies: 7 });
       renderCalendarList();
 
       // Posa focus al nou input

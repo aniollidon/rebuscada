@@ -129,7 +129,7 @@ async def startup_event():
 
 # Configurar CORS
 # En producció només permetre rebuscada.cat, en desenvolupament també localhost
-ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "https://rebuscada.cat, https://www.rebuscada.cat,http://localhost:3000").split(",")
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "https://rebuscada.cat, https://www.rebuscada.cat, http://localhost:3000").split(",")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
@@ -214,6 +214,21 @@ def is_catalan(word: str) -> bool:
         return False
     return all(c.isalpha() or c in "àèéíïòóúüç·-" for c in word)
 
+def calcular_joc_actual(games: list, days_diff: int) -> int:
+    """Calcula l'ID del joc actual basat en els dies transcorreguts i la durada de cada joc.
+    Cada joc té un camp 'dies' que indica quants dies dura (1=diari, 7=setmanal).
+    Retorna l'ID del joc que correspon al dia actual.
+    """
+    sorted_games = sorted(games, key=lambda g: g.get("id", 0))
+    cumulative_days = 0
+    for game in sorted_games:
+        dies = game.get("dies", 1)
+        if days_diff < cumulative_days + dies:
+            return game.get("id", 1)
+        cumulative_days += dies
+    # Si hem superat tots els jocs, retorna l'últim
+    return sorted_games[-1].get("id", 1) if sorted_games else 1
+
 @lru_cache(maxsize=CACHE_MAX_SIZE)
 def carregar_ranking(rebuscada: str):
     """Carrega el rànquing per una paraula específica"""
@@ -258,11 +273,11 @@ def validar_joc_disponible(rebuscada: str):
         games = data.get("games", [])
         start_date_str = obtenir_start_date()
         
-        # Calcular l'ID del joc actual
+        # Calcular l'ID del joc actual usant durada variable (dies)
         start_date = datetime.strptime(start_date_str, "%d-%m-%Y").date()
         today = datetime.now().date()
         days_diff = (today - start_date).days
-        current_game_id = max(1, days_diff + 1)
+        current_game_id = max(1, calcular_joc_actual(games, days_diff))
         
         # Buscar la paraula als jocs
         for game in games:
@@ -974,13 +989,9 @@ async def get_rebuscada():
                 "today": today.strftime("%d-%m-%Y")
             }
         
-        # Calcula la ID del joc (dies des de l'inici + 1)
+        # Calcula la ID del joc usant durada variable (dies)
         days_diff = (today - start_date).days
-        target_id = days_diff + 1
-        
-        # Assegura que l'ID estigui dins del rang
-        if target_id < 1:
-            target_id = 1
+        target_id = calcular_joc_actual(games, max(0, days_diff))
         
         # Busca el joc amb l'ID més proper
         sorted_games = sorted(games, key=lambda g: g.get("id", 0))
@@ -1041,14 +1052,15 @@ async def get_public_games():
         start_date = datetime.strptime(start_date_str, "%d-%m-%Y").date()
         today = datetime.now().date()
         
-        # Calcular l'ID del joc actual
+        # Calcular l'ID del joc actual usant durada variable (dies)
+        games = data.get("games", [])
         days_diff = (today - start_date).days
-        current_game_id = days_diff + 1
+        current_game_id = calcular_joc_actual(games, max(0, days_diff))
         
         return {
             "startDate": start_date_str,
             "today": today.strftime("%d-%m-%Y"),
-            "games": data.get("games", []),
+            "games": games,
             "currentGameId": max(1, current_game_id)
         }
     except Exception as e:
