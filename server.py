@@ -14,6 +14,7 @@ from diccionari_full import DiccionariFull
 import uuid
 import asyncio
 from datetime import datetime
+import stats as game_stats
 
 class GuessRequest(BaseModel):
     paraula: str
@@ -122,7 +123,11 @@ API_VERSION = "1.0.1"
 
 @app.on_event("startup")
 async def startup_event():
-    """Inicia la tasca de neteja de competicions caducades"""
+    """Inicia la tasca de neteja de competicions caducades i la base de dades d'estadístiques"""
+    # Inicialitzar base de dades d'estadístiques
+    game_stats.init_db()
+    logger.info("Stats DB initialized")
+    
     asyncio.create_task(cleanup_expired_competitions())
     logger.info(f"Competition cleanup task started (expiry: {COMPETITION_EXPIRY_DAYS} days)")
     logger.info(f"API Version: {API_VERSION}")
@@ -153,6 +158,11 @@ dicc_full = DiccionariFull(DICCIONARI_FULL_DB) if os.path.exists(DICCIONARI_FULL
 # Emmagatzematge en memòria per competicions
 competitions: Dict[str, CompetitionState] = {}
 competition_connections: Dict[str, List[WebSocket]] = {}
+
+def get_session_id(request: Request) -> str:
+    """Obté el session_id del header X-Session-Id o en genera un temporal."""
+    return request.headers.get("x-session-id", f"anon-{id(request)}")
+
 
 def obtenir_start_date() -> str:
     """Obté la data d'inici des del fitxer date.json"""
@@ -398,7 +408,7 @@ async def internal_cache_clear(request: Request):
         raise HTTPException(status_code=500, detail="Error intern en netejar la memòria cau")
 
 @app.post("/guess", response_model=GuessResponse)
-async def guess(request: GuessRequest):
+async def guess(request: GuessRequest, raw_request: Request):
     # Obtenir rànquing actiu (global o especificat)
     ranking_diccionari, total_paraules, paraula_objectiu = obtenir_ranking_actiu(request.rebuscada, request.es_personalitzada)
     
@@ -413,6 +423,20 @@ async def guess(request: GuessRequest):
                 f"GUESS: '{paraula_introduida}' (fora diccionari però trobat al rànquing) -> "
                 f"{'CORRECTA!' if es_correcta_directe else f'#'+str(rank_directe)} (objectiu: {paraula_objectiu})"
             )
+            # Registrar estadística
+            try:
+                session_id = get_session_id(raw_request)
+                game_stats.record_guess(
+                    session_id=session_id,
+                    rebuscada=request.rebuscada or DEFAULT_REBUSCADA,
+                    paraula=paraula_introduida,
+                    forma_canonica=None,
+                    posicio=rank_directe,
+                    es_correcta=es_correcta_directe,
+                    game_id=obtenir_game_id(request.rebuscada or DEFAULT_REBUSCADA)
+                )
+            except Exception as e:
+                logger.warning(f"Error registrant estadística de guess directe: {e}")
             return GuessResponse(
                 paraula=paraula_introduida,
                 forma_canonica=None,
@@ -446,6 +470,24 @@ async def guess(request: GuessRequest):
             estat_joc="guanyat" if es_correcta else None
         )
     
+    # Registrar estadístiques
+    try:
+        session_id = get_session_id(raw_request)
+    except Exception:
+        session_id = "unknown"
+    try:
+        game_stats.record_guess(
+            session_id=session_id,
+            rebuscada=request.rebuscada or DEFAULT_REBUSCADA,
+            paraula=paraula_introduida,
+            forma_canonica=forma_canonica if es_flexio else None,
+            posicio=rank,
+            es_correcta=es_correcta,
+            game_id=obtenir_game_id(request.rebuscada or DEFAULT_REBUSCADA)
+        )
+    except Exception as e:
+        logger.warning(f"Error registrant estadística de guess: {e}")
+    
     return GuessResponse(
         paraula=paraula_introduida,
         forma_canonica=forma_canonica if es_flexio else None,
@@ -455,7 +497,7 @@ async def guess(request: GuessRequest):
     )
 
 @app.post("/pista", response_model=PistaResponse)
-async def donar_pista(request: PistaRequest):
+async def donar_pista(request: PistaRequest, raw_request: Request):
     # Obtenir rànquing actiu (global o especificat)
     ranking_diccionari, total_paraules, paraula_objectiu = obtenir_ranking_actiu(request.rebuscada, request.es_personalitzada)
     intents_actuals = request.intents
@@ -551,6 +593,19 @@ async def donar_pista(request: PistaRequest):
             incrementar_pistes=True,
             posicio=ranking_diccionari[paraula_pista]
         )
+    
+    # Registrar estadística de pista
+    try:
+        session_id = get_session_id(raw_request)
+        game_stats.record_hint(
+            session_id=session_id,
+            rebuscada=request.rebuscada or DEFAULT_REBUSCADA,
+            paraula_pista=paraula_pista,
+            posicio=ranking_diccionari[paraula_pista],
+            game_id=obtenir_game_id(request.rebuscada or DEFAULT_REBUSCADA)
+        )
+    except Exception as e:
+        logger.warning(f"Error registrant estadística de pista: {e}")
     
     return PistaResponse(
         paraula=paraula_pista,
@@ -944,6 +999,20 @@ async def competition_websocket(websocket: WebSocket, comp_id: str):
         if websocket in competition_connections.get(comp_id, []):
             competition_connections[comp_id].remove(websocket)
 
+@app.post("/visit")
+async def register_visit(request: Request):
+    """Registra una visita a la web."""
+    try:
+        session_id = get_session_id(request)
+        body = await request.json()
+        rebuscada = body.get("rebuscada")
+        game_id = body.get("game_id")
+        game_stats.record_visit(session_id, rebuscada, game_id)
+        return {"ok": True}
+    except Exception as e:
+        logger.warning(f"Error registrant visita: {e}")
+        return {"ok": False}
+
 @app.get("/")
 async def root():
     return {"message": "API del joc de paraules (refactoritzat)"}
@@ -1075,7 +1144,7 @@ async def get_public_games():
         }
 
 @app.post("/rendirse", response_model=RendirseResponse)
-async def rendirse(request: RendirseRequest):
+async def rendirse(request: RendirseRequest, raw_request: Request):
     """Endpoint per rendir-se i obtenir la resposta correcta"""
     try:
         # Obtenir rànquing actiu (global o especificat)
@@ -1091,6 +1160,17 @@ async def rendirse(request: RendirseRequest):
                 request.nom_jugador, 
                 estat_joc="rendit"
             )
+        
+        # Registrar estadística de rendició
+        try:
+            session_id = get_session_id(raw_request)
+            game_stats.record_surrender(
+                session_id=session_id,
+                rebuscada=request.rebuscada or DEFAULT_REBUSCADA,
+                game_id=obtenir_game_id(request.rebuscada or DEFAULT_REBUSCADA)
+            )
+        except Exception as e:
+            logger.warning(f"Error registrant estadística de rendició: {e}")
         
         return RendirseResponse(paraula_correcta=paraula_objectiu)
     

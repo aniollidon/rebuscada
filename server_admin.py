@@ -1298,6 +1298,66 @@ def save_games(req: SaveGamesRequest, _: None = Depends(require_auth)):
 
 # ==================== FI ENDPOINTS GAMES.JSON ====================
 
+# ==================== ENDPOINTS D'ESTADÍSTIQUES ====================
+
+import stats as game_stats
+
+@app.get("/api/stats/overview")
+def stats_overview(_: None = Depends(require_auth)):
+    """Retorna estadístiques generals (resum)."""
+    try:
+        game_stats.init_db()
+        return game_stats.get_overview_stats()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error obtenint estadístiques: {str(e)}")
+
+@app.get("/api/stats/daily")
+def stats_daily(days: int = 30, _: None = Depends(require_auth)):
+    """Retorna estadístiques diàries dels últims N dies."""
+    try:
+        game_stats.init_db()
+        return game_stats.get_daily_stats(days)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error obtenint estadístiques diàries: {str(e)}")
+
+@app.get("/api/stats/per-game")
+def stats_per_game(_: None = Depends(require_auth)):
+    """Retorna estadístiques per joc (rebuscada)."""
+    try:
+        game_stats.init_db()
+        return game_stats.get_per_game_stats()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error obtenint estadístiques per joc: {str(e)}")
+
+@app.get("/api/stats/words/{rebuscada}")
+def stats_words_played(rebuscada: str, _: None = Depends(require_auth)):
+    """Retorna les paraules més jugades per una rebuscada específica."""
+    try:
+        game_stats.init_db()
+        return game_stats.get_words_played_for_game(rebuscada)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error obtenint paraules jugades: {str(e)}")
+
+@app.get("/api/stats/completions")
+def stats_completions(rebuscada: str = None, _: None = Depends(require_auth)):
+    """Retorna la distribució d'intents per completar jocs."""
+    try:
+        game_stats.init_db()
+        return game_stats.get_completion_distribution(rebuscada)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error obtenint distribució: {str(e)}")
+
+@app.get("/api/stats/hints")
+def stats_hints(_: None = Depends(require_auth)):
+    """Retorna estadístiques de pistes per joc."""
+    try:
+        game_stats.init_db()
+        return game_stats.get_hint_stats_per_game()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error obtenint estadístiques de pistes: {str(e)}")
+
+# ==================== FI ENDPOINTS D'ESTADÍSTIQUES ====================
+
 if __name__ == "__main__":
     import sys
     import argparse

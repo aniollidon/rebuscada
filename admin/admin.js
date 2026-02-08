@@ -13,6 +13,7 @@ const AUTH_ENDPOINT = `${API_BASE}/auth`;
 const GENERATE_ENDPOINT = `${API_BASE}/generate`; // alternatiu
 const GENERATE_RANDOM_ENDPOINT = `${API_BASE}/generate-random`;
 const AI_GENERATE_ENDPOINT = `${API_BASE}/ai-generate`;
+const STATS_API = `${API_BASE}/stats`;
 // Page size per a càrrega de fragments
 const PAGE_SIZE = 300;
 // Diccionari (obertura en nova pestanya). Substituïm [PARAULA]
@@ -198,6 +199,9 @@ function renderApp() {
       <div class="d-flex justify-content-between align-items-center mb-3">
         <h4 class="mb-0 rebuscada" >Rebuscada.cat - Gestió</h4>
         <div class="d-flex gap-2">
+          <button class="btn btn-outline-secondary btn-sm" id="stats-btn" title="Estadístiques de joc">
+            <i class="bi bi-bar-chart-line"></i>
+          </button>
           <button class="btn btn-outline-secondary btn-sm" id="calendar-btn" title="Gestió del calendari de paraules">
             <i class="bi bi-calendar3"></i>
           </button>
@@ -350,6 +354,23 @@ function renderApp() {
           </div>
         </div>
       </div>
+      <!-- Modal d'estadístiques -->
+      <div class="modal fade" id="statsModal" tabindex="-1" aria-labelledby="statsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title" id="statsModalLabel"><i class="bi bi-bar-chart-line"></i> Estadístiques</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tanca"></button>
+            </div>
+            <div class="modal-body" id="stats-body" style="min-height:400px;">
+              <div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div><p class="mt-2 text-muted">Carregant estadístiques...</p></div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tanca</button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   `;
   bindStaticEvents();
@@ -437,6 +458,8 @@ function bindStaticEvents() {
   if (iaShortcutsBtn) iaShortcutsBtn.onclick = openIAShortcutsModal;
   if (settingsBtn) settingsBtn.onclick = openSettingsModal;
   if (calendarBtn) calendarBtn.onclick = openCalendarModal;
+  const statsBtn = document.getElementById("stats-btn");
+  if (statsBtn) statsBtn.onclick = openStatsModal;
 
   // Event per al selector de dificultat
   if (difficultySelector) {
@@ -4364,3 +4387,346 @@ async function promptAddNewWord() {
     alert("Error de xarxa");
   }
 }
+
+// ==================== ESTADÍSTIQUES ====================
+
+// Estat dels gràfics (per poder destruir-los quan es recarreguen)
+let statsCharts = {};
+
+function destroyStatsCharts() {
+  Object.values(statsCharts).forEach(c => { try { c.destroy(); } catch(_) {} });
+  statsCharts = {};
+}
+
+async function openStatsModal() {
+  const modal = new bootstrap.Modal(document.getElementById("statsModal"));
+  modal.show();
+  
+  const body = document.getElementById("stats-body");
+  body.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div><p class="mt-2 text-muted">Carregant estadístiques...</p></div>';
+  
+  destroyStatsCharts();
+  
+  try {
+    // Carregar totes les dades en paral·lel
+    const [overviewRes, dailyRes, perGameRes, completionsRes, hintsRes] = await Promise.all([
+      fetch(`${STATS_API}/overview`, { headers: authHeaders() }),
+      fetch(`${STATS_API}/daily?days=30`, { headers: authHeaders() }),
+      fetch(`${STATS_API}/per-game`, { headers: authHeaders() }),
+      fetch(`${STATS_API}/completions`, { headers: authHeaders() }),
+      fetch(`${STATS_API}/hints`, { headers: authHeaders() }),
+    ]);
+    
+    if (!overviewRes.ok) throw new Error("Error carregant estadístiques");
+    
+    const overview = await overviewRes.json();
+    const daily = await dailyRes.json();
+    const perGame = await perGameRes.json();
+    const completions = await completionsRes.json();
+    const hints = await hintsRes.json();
+    
+    renderStatsContent(body, overview, daily, perGame, completions, hints);
+  } catch (e) {
+    body.innerHTML = `<div class="alert alert-warning"><i class="bi bi-exclamation-triangle"></i> ${e.message || 'Error carregant estadístiques'}</div>
+    <p class="text-muted">Les estadístiques es comencen a recollir quan els jugadors accedeixen al joc. Si la base de dades és buida, és normal.</p>`;
+  }
+}
+
+function renderStatsContent(container, overview, daily, perGame, completions, hints) {
+  // Formatadors
+  const pct = (a, b) => b > 0 ? Math.round(a / b * 100) : 0;
+  
+  container.innerHTML = `
+    <!-- RESUM -->
+    <div class="row g-3 mb-4">
+      <div class="col-md-3"><div class="stats-card stats-card-blue">
+        <div class="stats-card-number">${overview.visits_today}</div>
+        <div class="stats-card-label">Visites avui</div>
+        <div class="stats-card-sub">${overview.total_visits} totals</div>
+      </div></div>
+      <div class="col-md-3"><div class="stats-card stats-card-green">
+        <div class="stats-card-number">${overview.players_today}</div>
+        <div class="stats-card-label">Jugadors avui</div>
+        <div class="stats-card-sub">${overview.total_players} totals</div>
+      </div></div>
+      <div class="col-md-3"><div class="stats-card stats-card-purple">
+        <div class="stats-card-number">${overview.returning_players}</div>
+        <div class="stats-card-label">Jugadors recurrents</div>
+        <div class="stats-card-sub">${pct(overview.returning_players, overview.total_players)}% del total</div>
+      </div></div>
+      <div class="col-md-3"><div class="stats-card stats-card-orange">
+        <div class="stats-card-number">${overview.completions_today}</div>
+        <div class="stats-card-label">Completats avui</div>
+        <div class="stats-card-sub">${overview.total_completions} totals · ${overview.total_surrenders} rendicions</div>
+      </div></div>
+    </div>
+    <div class="row g-3 mb-4">
+      <div class="col-md-4"><div class="stats-card stats-card-teal">
+        <div class="stats-card-number">${overview.avg_intents_per_completion}</div>
+        <div class="stats-card-label">Mitjana d'intents per completar</div>
+      </div></div>
+      <div class="col-md-4"><div class="stats-card stats-card-pink">
+        <div class="stats-card-number">${overview.total_hints}</div>
+        <div class="stats-card-label">Pistes demanades (total)</div>
+      </div></div>
+      <div class="col-md-4"><div class="stats-card stats-card-gray">
+        <div class="stats-card-number">${pct(overview.total_completions, overview.total_completions + overview.total_surrenders)}%</div>
+        <div class="stats-card-label">Taxa de completació</div>
+        <div class="stats-card-sub">(completats vs completats+rendicions)</div>
+      </div></div>
+    </div>
+    
+    <!-- GRÀFICS -->
+    <div class="row g-3 mb-4">
+      <div class="col-md-8">
+        <div class="stats-chart-container">
+          <h6 class="mb-2"><i class="bi bi-graph-up"></i> Activitat diària (últims 30 dies)</h6>
+          <canvas id="stats-daily-chart" height="250"></canvas>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="stats-chart-container">
+          <h6 class="mb-2"><i class="bi bi-pie-chart"></i> Distribució d'intents</h6>
+          <canvas id="stats-completion-chart" height="250"></canvas>
+        </div>
+      </div>
+    </div>
+    
+    <!-- TAULA PER JOC -->
+    <div class="row g-3 mb-4">
+      <div class="col-12">
+        <div class="stats-chart-container">
+          <h6 class="mb-2"><i class="bi bi-table"></i> Estadístiques per joc</h6>
+          <div style="max-height:350px; overflow-y:auto;">
+            <table class="table table-sm table-hover mb-0">
+              <thead class="table-light sticky-top">
+                <tr>
+                  <th>Paraula</th>
+                  <th class="text-center">Jugadors</th>
+                  <th class="text-center">Intents</th>
+                  <th class="text-center">Completats</th>
+                  <th class="text-center">Rendicions</th>
+                  <th class="text-center">Pistes</th>
+                  <th class="text-center">Avg intents</th>
+                  <th class="text-center">% Completació</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                ${perGame.length === 0 ? '<tr><td colspan="9" class="text-muted text-center">Encara no hi ha dades</td></tr>' : 
+                  perGame.map(g => `
+                    <tr>
+                      <td><strong>${g.rebuscada}</strong>${g.game_id ? ` <small class="text-muted">#${g.game_id}</small>` : ''}</td>
+                      <td class="text-center">${g.jugadors}</td>
+                      <td class="text-center">${g.total_intents}</td>
+                      <td class="text-center"><span class="badge bg-success">${g.completions}</span></td>
+                      <td class="text-center"><span class="badge bg-danger">${g.surrenders}</span></td>
+                      <td class="text-center">${g.hints}</td>
+                      <td class="text-center">${g.avg_intents ? Math.round(g.avg_intents * 10) / 10 : '-'}</td>
+                      <td class="text-center">${g.completion_rate ? g.completion_rate + '%' : '-'}</td>
+                      <td><button class="btn btn-outline-primary btn-sm py-0 px-1" onclick="loadWordsForGame('${g.rebuscada}')" title="Veure paraules jugades"><i class="bi bi-eye"></i></button></td>
+                    </tr>
+                  `).join('')
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- PARAULES JUGADES (dinàmic) -->
+    <div id="stats-words-detail" class="mb-4" style="display:none;">
+      <div class="stats-chart-container">
+        <h6 class="mb-2"><i class="bi bi-chat-dots"></i> Paraules jugades per: <strong id="stats-words-title"></strong></h6>
+        <div class="row g-3">
+          <div class="col-md-7">
+            <canvas id="stats-words-chart" height="300"></canvas>
+          </div>
+          <div class="col-md-5">
+            <div id="stats-words-table" style="max-height:300px; overflow-y:auto;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  // Renderitzar gràfics
+  renderDailyChart(daily);
+  renderCompletionChart(completions);
+}
+
+function renderDailyChart(daily) {
+  const ctx = document.getElementById("stats-daily-chart");
+  if (!ctx || !daily.length) return;
+  
+  const labels = daily.map(d => {
+    const parts = d.data.split('-');
+    return parts[2] + '/' + parts[1];
+  });
+  
+  statsCharts.daily = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Visites',
+          data: daily.map(d => d.visits),
+          borderColor: '#4285f4',
+          backgroundColor: 'rgba(66,133,244,0.1)',
+          fill: true,
+          tension: 0.3,
+        },
+        {
+          label: 'Jugadors',
+          data: daily.map(d => d.players),
+          borderColor: '#34a853',
+          backgroundColor: 'rgba(52,168,83,0.1)',
+          fill: true,
+          tension: 0.3,
+        },
+        {
+          label: 'Completats',
+          data: daily.map(d => d.completions),
+          borderColor: '#fbbc04',
+          backgroundColor: 'rgba(251,188,4,0.1)',
+          fill: true,
+          tension: 0.3,
+        },
+        {
+          label: 'Rendicions',
+          data: daily.map(d => d.surrenders),
+          borderColor: '#ea4335',
+          backgroundColor: 'rgba(234,67,53,0.05)',
+          fill: false,
+          tension: 0.3,
+          borderDash: [5, 5],
+        },
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'top', labels: { usePointStyle: true, boxWidth: 8 } },
+      },
+      scales: {
+        y: { beginAtZero: true, ticks: { precision: 0 } },
+        x: { ticks: { maxRotation: 45 } },
+      },
+      interaction: { intersect: false, mode: 'index' },
+    }
+  });
+}
+
+function renderCompletionChart(completions) {
+  const ctx = document.getElementById("stats-completion-chart");
+  if (!ctx || !completions.length) return;
+  
+  const colors = ['#34a853', '#4285f4', '#fbbc04', '#ff6d01', '#ea4335', '#9334e6'];
+  
+  statsCharts.completions = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: completions.map(c => c.rang + ' intents'),
+      datasets: [{
+        data: completions.map(c => c.jugadors),
+        backgroundColor: colors.slice(0, completions.length),
+        borderWidth: 2,
+        borderColor: '#fff',
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { usePointStyle: true, boxWidth: 8, font: { size: 11 } },
+        },
+      },
+    }
+  });
+}
+
+async function loadWordsForGame(rebuscada) {
+  const detail = document.getElementById("stats-words-detail");
+  const title = document.getElementById("stats-words-title");
+  const tableDiv = document.getElementById("stats-words-table");
+  
+  if (!detail) return;
+  
+  detail.style.display = "block";
+  title.textContent = rebuscada;
+  tableDiv.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div></div>';
+  
+  // Destruir gràfic anterior si existeix
+  if (statsCharts.words) { statsCharts.words.destroy(); delete statsCharts.words; }
+  
+  try {
+    const res = await fetch(`${STATS_API}/words/${encodeURIComponent(rebuscada)}`, { headers: authHeaders() });
+    if (!res.ok) throw new Error();
+    const words = await res.json();
+    
+    if (!words.length) {
+      tableDiv.innerHTML = '<p class="text-muted">Sense dades</p>';
+      return;
+    }
+    
+    // Gràfic de barres amb les top 20 paraules
+    const top = words.slice(0, 20);
+    const ctx = document.getElementById("stats-words-chart");
+    
+    statsCharts.words = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: top.map(w => w.paraula),
+        datasets: [{
+          label: 'Vegades jugada',
+          data: top.map(w => w.vegades),
+          backgroundColor: top.map(w => {
+            const p = w.millor_posicio;
+            if (p < 100) return 'rgba(52,168,83,0.7)';
+            if (p < 250) return 'rgba(251,188,4,0.7)';
+            if (p < 500) return 'rgba(255,109,1,0.7)';
+            return 'rgba(234,67,53,0.7)';
+          }),
+          borderRadius: 3,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        indexAxis: 'y',
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { beginAtZero: true, ticks: { precision: 0 } },
+          y: { ticks: { font: { size: 11 } } },
+        },
+      }
+    });
+    
+    // Taula completa
+    tableDiv.innerHTML = `
+      <table class="table table-sm table-hover mb-0" style="font-size:12px;">
+        <thead class="table-light sticky-top"><tr>
+          <th>Paraula</th><th class="text-center">Vegades</th><th class="text-center">Millor pos.</th>
+        </tr></thead>
+        <tbody>
+          ${words.map(w => `<tr>
+            <td>${w.paraula}</td>
+            <td class="text-center">${w.vegades}</td>
+            <td class="text-center" style="color:${colorPerPos(w.millor_posicio)}">${w.millor_posicio}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`;
+    
+    // Scroll a la secció
+    detail.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  } catch (e) {
+    tableDiv.innerHTML = '<p class="text-danger">Error carregant dades</p>';
+  }
+}
+
+// ==================== FI ESTADÍSTIQUES ====================

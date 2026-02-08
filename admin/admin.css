@@ -462,3 +462,100 @@
 }
 
 /* ==================== FI ESTILS DEL CALENDARI ==================== */
+
+/* ==================== ESTILS D'ESTADÍSTIQUES ==================== */
+
+.stats-card {
+  border-radius: 10px;
+  padding: 16px 18px;
+  text-align: center;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.stats-card-number {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.stats-card-label {
+  font-size: 13px;
+  font-weight: 500;
+  margin-top: 2px;
+  color: #495057;
+}
+
+.stats-card-sub {
+  font-size: 11px;
+  color: #868e96;
+  margin-top: 2px;
+}
+
+.stats-card-blue {
+  background: linear-gradient(135deg, #e8f0fe 0%, #d2e3fc 100%);
+  border-color: #a8c7fa;
+}
+.stats-card-blue .stats-card-number { color: #1a73e8; }
+
+.stats-card-green {
+  background: linear-gradient(135deg, #e6f4ea 0%, #ceead6 100%);
+  border-color: #a8dab5;
+}
+.stats-card-green .stats-card-number { color: #1e8e3e; }
+
+.stats-card-purple {
+  background: linear-gradient(135deg, #f3e8fd 0%, #e8d5f5 100%);
+  border-color: #d7aefb;
+}
+.stats-card-purple .stats-card-number { color: #8430ce; }
+
+.stats-card-orange {
+  background: linear-gradient(135deg, #fef7e0 0%, #feefc3 100%);
+  border-color: #fdd663;
+}
+.stats-card-orange .stats-card-number { color: #e37400; }
+
+.stats-card-teal {
+  background: linear-gradient(135deg, #e0f7fa 0%, #b2ebf2 100%);
+  border-color: #80deea;
+}
+.stats-card-teal .stats-card-number { color: #00838f; }
+
+.stats-card-pink {
+  background: linear-gradient(135deg, #fce4ec 0%, #f8bbd0 100%);
+  border-color: #f48fb1;
+}
+.stats-card-pink .stats-card-number { color: #c2185b; }
+
+.stats-card-gray {
+  background: linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%);
+  border-color: #bdbdbd;
+}
+.stats-card-gray .stats-card-number { color: #424242; }
+
+.stats-chart-container {
+  background: #fff;
+  border-radius: 10px;
+  padding: 16px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  border: 1px solid #e9ecef;
+}
+
+.stats-chart-container h6 {
+  color: #495057;
+  font-weight: 600;
+}
+
+.stats-chart-container h6 i {
+  margin-right: 6px;
+  color: #868e96;
+}
+
+/* Modal d'estadístiques: assegura espai per scroll */
+#statsModal .modal-body {
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+/* ==================== FI ESTILS D'ESTADÍSTIQUES ==================== */
