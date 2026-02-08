@@ -213,31 +213,35 @@ def get_overview_stats() -> Dict[str, Any]:
     with get_db() as conn:
         today = date.today().strftime("%Y-%m-%d")
 
+        # Helper SQL: normalitza anon-* a un sol ID
+        # NSID = Normalized Session ID
+        NSID = "CASE WHEN session_id LIKE 'anon-%' THEN '__anon__' ELSE session_id END"
+
         # Visites totals (sessions úniques per dia)
         total_visits = conn.execute(
-            "SELECT COUNT(DISTINCT session_id || data) FROM visits"
+            f"SELECT COUNT(DISTINCT {NSID} || data) FROM visits"
         ).fetchone()[0]
 
         visits_today = conn.execute(
-            "SELECT COUNT(DISTINCT session_id) FROM visits WHERE data = ?",
+            f"SELECT COUNT(DISTINCT {NSID}) FROM visits WHERE data = ?",
             (today,)
         ).fetchone()[0]
 
         # Jugadors actius (sessions que han enviat almenys un guess)
         total_players = conn.execute(
-            "SELECT COUNT(DISTINCT session_id) FROM guesses"
+            f"SELECT COUNT(DISTINCT {NSID}) FROM guesses"
         ).fetchone()[0]
 
         players_today = conn.execute(
-            "SELECT COUNT(DISTINCT session_id) FROM guesses WHERE data = ?",
+            f"SELECT COUNT(DISTINCT {NSID}) FROM guesses WHERE data = ?",
             (today,)
         ).fetchone()[0]
 
         # Jugadors recurrents (han jugat a més d'una rebuscada diferent)
         returning_players = conn.execute(
-            """SELECT COUNT(*) FROM (
-                SELECT session_id FROM guesses 
-                GROUP BY session_id 
+            f"""SELECT COUNT(*) FROM (
+                SELECT {NSID} as nsid FROM guesses 
+                GROUP BY nsid 
                 HAVING COUNT(DISTINCT rebuscada) > 1
             )"""
         ).fetchone()[0]
@@ -303,10 +307,10 @@ def get_daily_stats(days: int = 30) -> List[Dict[str, Any]]:
                 ) ORDER BY data DESC LIMIT ?
             ) d
             LEFT JOIN (
-                SELECT data, COUNT(DISTINCT session_id) as visits FROM visits GROUP BY data
+                SELECT data, COUNT(DISTINCT CASE WHEN session_id LIKE 'anon-%' THEN '__anon__' ELSE session_id END) as visits FROM visits GROUP BY data
             ) v ON d.data = v.data
             LEFT JOIN (
-                SELECT data, COUNT(DISTINCT session_id) as players, COUNT(*) as guesses 
+                SELECT data, COUNT(DISTINCT CASE WHEN session_id LIKE 'anon-%' THEN '__anon__' ELSE session_id END) as players, COUNT(*) as guesses 
                 FROM guesses GROUP BY data
             ) g ON d.data = g.data
             LEFT JOIN (
@@ -331,13 +335,13 @@ def get_per_game_stats() -> List[Dict[str, Any]]:
             SELECT 
                 g.rebuscada,
                 g.game_id,
-                COUNT(DISTINCT g.session_id) as jugadors,
+                COUNT(DISTINCT CASE WHEN g.session_id LIKE 'anon-%' THEN '__anon__' ELSE g.session_id END) as jugadors,
                 COUNT(*) as total_intents,
                 COALESCE(c.completions, 0) as completions,
                 COALESCE(s.surrenders, 0) as surrenders,
                 COALESCE(h.hints, 0) as hints,
                 COALESCE(c.avg_intents, 0) as avg_intents,
-                ROUND(CAST(COALESCE(c.completions, 0) AS FLOAT) / NULLIF(COUNT(DISTINCT g.session_id), 0) * 100, 1) as completion_rate
+                ROUND(CAST(COALESCE(c.completions, 0) AS FLOAT) / NULLIF(COUNT(DISTINCT CASE WHEN g.session_id LIKE 'anon-%' THEN '__anon__' ELSE g.session_id END), 0) * 100, 1) as completion_rate
             FROM guesses g
             LEFT JOIN (
                 SELECT rebuscada, COUNT(*) as completions, AVG(num_intents) as avg_intents
@@ -378,17 +382,18 @@ def get_words_played_for_game(rebuscada: str) -> List[Dict[str, Any]]:
 
 
 def get_players_for_game(rebuscada: str) -> List[Dict[str, Any]]:
-    """Retorna la llista de jugadors (sessions) per una rebuscada, amb resum."""
+    """Retorna la llista de jugadors (sessions) per una rebuscada, amb resum.
+    Fusiona totes les sessions anònimes (anon-*) en un sol jugador."""
     with get_db() as conn:
         rows = conn.execute("""
             SELECT 
-                g.session_id,
+                CASE WHEN g.session_id LIKE 'anon-%' THEN '__anon__' ELSE g.session_id END as session_id,
                 COUNT(*) as num_intents,
                 MAX(g.es_correcta) as ha_completat,
                 MIN(g.timestamp) as primer_intent,
                 MAX(g.timestamp) as ultim_intent,
-                COALESCE(h.num_pistes, 0) as num_pistes,
-                COALESCE(sr.rendicio, 0) as es_rendicio
+                COALESCE(SUM(h.num_pistes), 0) as num_pistes,
+                MAX(COALESCE(sr.rendicio, 0)) as es_rendicio
             FROM guesses g
             LEFT JOIN (
                 SELECT session_id, rebuscada, COUNT(*) as num_pistes
@@ -400,43 +405,53 @@ def get_players_for_game(rebuscada: str) -> List[Dict[str, Any]]:
                 FROM surrenders WHERE rebuscada = ?
             ) sr ON g.session_id = sr.session_id AND sr.rebuscada = g.rebuscada
             WHERE g.rebuscada = ?
-            GROUP BY g.session_id
-            ORDER BY g.session_id
+            GROUP BY CASE WHEN g.session_id LIKE 'anon-%' THEN '__anon__' ELSE g.session_id END
+            ORDER BY MIN(g.timestamp)
         """, (rebuscada, rebuscada, rebuscada)).fetchall()
 
         result = []
-        for i, row in enumerate(rows, 1):
+        player_num = 0
+        for row in rows:
             d = dict(row)
-            # Etiqueta curta per al jugador
             sid = d['session_id']
-            d['label'] = f"Jugador {i}"
-            d['short_id'] = sid[:8] if len(sid) > 8 else sid
+            if sid == '__anon__':
+                d['label'] = "Anònim"
+                d['short_id'] = "anònim"
+            else:
+                player_num += 1
+                d['label'] = f"Jugador {player_num}"
+                d['short_id'] = sid[:8] if len(sid) > 8 else sid
             result.append(d)
         return result
 
 
 def get_player_session(rebuscada: str, session_id: str) -> Dict[str, Any]:
-    """Retorna la partida completa d'un jugador per una rebuscada."""
+    """Retorna la partida completa d'un jugador per una rebuscada.
+    Si session_id és '__anon__', agrupa totes les sessions anon-*."""
     with get_db() as conn:
-        guesses = conn.execute("""
+        is_anon = session_id == '__anon__'
+        session_filter = "session_id LIKE 'anon-%'" if is_anon else "session_id = ?"
+        params = (rebuscada,) if is_anon else (rebuscada, session_id)
+
+        guesses = conn.execute(f"""
             SELECT paraula, forma_canonica, posicio, es_correcta, timestamp
             FROM guesses
-            WHERE rebuscada = ? AND session_id = ?
+            WHERE rebuscada = ? AND {session_filter}
             ORDER BY timestamp ASC
-        """, (rebuscada, session_id)).fetchall()
+        """, params).fetchall()
 
-        hints = conn.execute("""
+        hints = conn.execute(f"""
             SELECT paraula_pista, posicio, timestamp
             FROM hints
-            WHERE rebuscada = ? AND session_id = ?
+            WHERE rebuscada = ? AND {session_filter}
             ORDER BY timestamp ASC
-        """, (rebuscada, session_id)).fetchall()
+        """, params).fetchall()
 
-        surrender = conn.execute("""
+        surrender = conn.execute(f"""
             SELECT timestamp FROM surrenders
-            WHERE rebuscada = ? AND session_id = ?
+            WHERE rebuscada = ? AND {session_filter}
             LIMIT 1
-        """, (rebuscada, session_id)).fetchone()
+        """, params).fetchone()
 
         return {
             "guesses": [dict(r) for r in guesses],

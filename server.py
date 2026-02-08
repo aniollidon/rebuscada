@@ -13,6 +13,7 @@ from diccionari import Diccionari
 from diccionari_full import DiccionariFull
 import uuid
 import asyncio
+import hashlib
 from datetime import datetime
 import stats as game_stats
 
@@ -160,8 +161,15 @@ competitions: Dict[str, CompetitionState] = {}
 competition_connections: Dict[str, List[WebSocket]] = {}
 
 def get_session_id(request: Request) -> str:
-    """Obté el session_id del header X-Session-Id o en genera un temporal."""
-    return request.headers.get("x-session-id", f"anon-{id(request)}")
+    """Obté el session_id del header X-Session-Id o en genera un estable basat en IP+UA."""
+    sid = request.headers.get("x-session-id")
+    if sid:
+        return sid
+    # Fallback: hash estable de IP + User-Agent perquè el mateix navegador = mateix jugador
+    ip = request.client.host if request.client else "unknown"
+    ua = request.headers.get("user-agent", "")
+    raw = f"{ip}:{ua}"
+    return f"anon-{hashlib.sha256(raw.encode()).hexdigest()[:16]}"
 
 
 def obtenir_start_date() -> str:
