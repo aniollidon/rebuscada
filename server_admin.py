@@ -1338,6 +1338,24 @@ def stats_words_played(rebuscada: str, _: None = Depends(require_auth)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error obtenint paraules jugades: {str(e)}")
 
+@app.get("/api/stats/players/{rebuscada}")
+def stats_players(rebuscada: str, _: None = Depends(require_auth)):
+    """Retorna la llista de jugadors per una rebuscada."""
+    try:
+        game_stats.init_db()
+        return game_stats.get_players_for_game(rebuscada)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error obtenint jugadors: {str(e)}")
+
+@app.get("/api/stats/player-session/{rebuscada}/{session_id}")
+def stats_player_session(rebuscada: str, session_id: str, _: None = Depends(require_auth)):
+    """Retorna la partida completa d'un jugador."""
+    try:
+        game_stats.init_db()
+        return game_stats.get_player_session(rebuscada, session_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error obtenint sessió del jugador: {str(e)}")
+
 @app.get("/api/stats/completions")
 def stats_completions(rebuscada: str = None, _: None = Depends(require_auth)):
     """Retorna la distribució d'intents per completar jocs."""

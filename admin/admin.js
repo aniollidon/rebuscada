@@ -4568,6 +4568,11 @@ function renderStatsContent(
             <div id="stats-words-table" style="max-height:300px; overflow-y:auto;"></div>
           </div>
         </div>
+        <!-- Llista de jugadors -->
+        <hr class="my-3">
+        <h6 class="mb-2"><i class="bi bi-people"></i> Partides individuals</h6>
+        <div id="stats-players-list"></div>
+        <div id="stats-player-session" style="display:none;" class="mt-3"></div>
       </div>
     </div>
   `;
@@ -4768,10 +4773,166 @@ async function loadWordsForGame(rebuscada) {
         </tbody>
       </table>`;
 
+    // Carregar jugadors
+    loadPlayersForGame(rebuscada);
+
     // Scroll a la secció
     detail.scrollIntoView({ behavior: "smooth", block: "nearest" });
   } catch (e) {
     tableDiv.innerHTML = '<p class="text-danger">Error carregant dades</p>';
+  }
+}
+
+async function loadPlayersForGame(rebuscada) {
+  const container = document.getElementById("stats-players-list");
+  if (!container) return;
+  container.innerHTML =
+    '<div class="text-center py-2"><div class="spinner-border spinner-border-sm text-primary"></div></div>';
+  // Amagar detall de sessió anterior
+  const sessionDiv = document.getElementById("stats-player-session");
+  if (sessionDiv) sessionDiv.style.display = "none";
+
+  try {
+    const res = await fetch(
+      `${STATS_API}/players/${encodeURIComponent(rebuscada)}`,
+      { headers: authHeaders() },
+    );
+    if (!res.ok) throw new Error();
+    const players = await res.json();
+
+    if (!players.length) {
+      container.innerHTML =
+        '<p class="text-muted small">Cap jugador registrat</p>';
+      return;
+    }
+
+    container.innerHTML = `
+      <div class="d-flex flex-wrap gap-2">
+        ${players
+          .map((p) => {
+            const badge = p.ha_completat
+              ? "bg-success"
+              : p.es_rendicio
+                ? "bg-danger"
+                : "bg-secondary";
+            const icon = p.ha_completat
+              ? "check-circle"
+              : p.es_rendicio
+                ? "x-circle"
+                : "hourglass-split";
+            return `<button class="btn btn-sm btn-outline-secondary player-session-btn" 
+            data-session="${p.session_id}" data-rebuscada="${rebuscada}"
+            title="${p.short_id} — ${p.num_intents} intents, ${p.num_pistes} pistes">
+            <i class="bi bi-${icon} text-${p.ha_completat ? "success" : p.es_rendicio ? "danger" : "warning"}"></i>
+            ${p.label}
+            <span class="badge ${badge} ms-1">${p.num_intents}</span>
+          </button>`;
+          })
+          .join("")}
+      </div>
+    `;
+
+    // Bind clicks
+    container.querySelectorAll(".player-session-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        container
+          .querySelectorAll(".player-session-btn")
+          .forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        loadPlayerSession(
+          btn.dataset.rebuscada,
+          btn.dataset.session,
+          btn.textContent.trim().split("\n")[0],
+        );
+      });
+    });
+  } catch (e) {
+    container.innerHTML =
+      '<p class="text-danger small">Error carregant jugadors</p>';
+  }
+}
+
+async function loadPlayerSession(rebuscada, sessionId, playerLabel) {
+  const container = document.getElementById("stats-player-session");
+  if (!container) return;
+  container.style.display = "block";
+  container.innerHTML =
+    '<div class="text-center py-2"><div class="spinner-border spinner-border-sm text-primary"></div></div>';
+
+  try {
+    const res = await fetch(
+      `${STATS_API}/player-session/${encodeURIComponent(rebuscada)}/${encodeURIComponent(sessionId)}`,
+      { headers: authHeaders() },
+    );
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+
+    // Combinar guesses i hints en una timeline
+    const timeline = [];
+    data.guesses.forEach((g) =>
+      timeline.push({ ...g, type: "guess", ts: g.timestamp }),
+    );
+    data.hints.forEach((h) =>
+      timeline.push({ ...h, type: "hint", ts: h.timestamp }),
+    );
+    if (data.surrendered)
+      timeline.push({ type: "surrender", ts: data.surrender_time });
+    timeline.sort((a, b) => a.ts.localeCompare(b.ts));
+
+    if (!timeline.length) {
+      container.innerHTML =
+        '<p class="text-muted small">Sense dades per aquest jugador</p>';
+      return;
+    }
+
+    // Format hora
+    const fmtTime = (ts) => {
+      if (!ts) return "";
+      try {
+        const d = new Date(ts);
+        return d.toLocaleTimeString("ca", {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        });
+      } catch {
+        return ts.split("T")[1]?.substring(0, 8) || "";
+      }
+    };
+
+    let html = `<h6 class="mb-2 text-primary"><i class="bi bi-person"></i> ${playerLabel}</h6>`;
+    html += '<div style="max-height:300px; overflow-y:auto;">';
+    html +=
+      '<table class="table table-sm mb-0" style="font-size:12px;"><thead class="table-light sticky-top"><tr>';
+    html +=
+      '<th style="width:30px">#</th><th>Acció</th><th>Paraula</th><th class="text-center">Posició</th><th>Hora</th></tr></thead><tbody>';
+
+    let guessNum = 0;
+    timeline.forEach((ev) => {
+      if (ev.type === "guess") {
+        guessNum++;
+        const word = ev.forma_canonica
+          ? `${ev.paraula} <small class="text-muted">(${ev.forma_canonica})</small>`
+          : ev.paraula;
+        const posColor = colorPerPos(ev.posicio);
+        if (ev.es_correcta) {
+          html += `<tr class="table-success"><td>${guessNum}</td><td><span class="badge bg-success">✓ Encert!</span></td><td><strong>${word}</strong></td><td class="text-center" style="color:${posColor}">${ev.posicio}</td><td class="text-muted">${fmtTime(ev.ts)}</td></tr>`;
+        } else {
+          html += `<tr><td>${guessNum}</td><td><span class="badge bg-light text-dark">Intent</span></td><td>${word}</td><td class="text-center" style="color:${posColor}">${ev.posicio}</td><td class="text-muted">${fmtTime(ev.ts)}</td></tr>`;
+        }
+      } else if (ev.type === "hint") {
+        html += `<tr class="table-warning"><td></td><td><span class="badge bg-warning text-dark"><i class="bi bi-lightbulb"></i> Pista</span></td><td>${ev.paraula_pista}</td><td class="text-center" style="color:${colorPerPos(ev.posicio)}">${ev.posicio}</td><td class="text-muted">${fmtTime(ev.ts)}</td></tr>`;
+      } else if (ev.type === "surrender") {
+        html += `<tr class="table-danger"><td></td><td colspan="3"><span class="badge bg-danger"><i class="bi bi-flag"></i> S'ha rendit</span></td><td class="text-muted">${fmtTime(ev.ts)}</td></tr>`;
+      }
+    });
+
+    html += "</tbody></table></div>";
+    container.innerHTML = html;
+    container.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  } catch (e) {
+    container.innerHTML =
+      '<p class="text-danger small">Error carregant la partida</p>';
   }
 }
 

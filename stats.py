@@ -377,6 +377,75 @@ def get_words_played_for_game(rebuscada: str) -> List[Dict[str, Any]]:
         return [dict(row) for row in rows]
 
 
+def get_players_for_game(rebuscada: str) -> List[Dict[str, Any]]:
+    """Retorna la llista de jugadors (sessions) per una rebuscada, amb resum."""
+    with get_db() as conn:
+        rows = conn.execute("""
+            SELECT 
+                g.session_id,
+                COUNT(*) as num_intents,
+                MAX(g.es_correcta) as ha_completat,
+                MIN(g.timestamp) as primer_intent,
+                MAX(g.timestamp) as ultim_intent,
+                COALESCE(h.num_pistes, 0) as num_pistes,
+                COALESCE(sr.rendicio, 0) as es_rendicio
+            FROM guesses g
+            LEFT JOIN (
+                SELECT session_id, rebuscada, COUNT(*) as num_pistes
+                FROM hints WHERE rebuscada = ?
+                GROUP BY session_id
+            ) h ON g.session_id = h.session_id AND h.rebuscada = g.rebuscada
+            LEFT JOIN (
+                SELECT session_id, rebuscada, 1 as rendicio
+                FROM surrenders WHERE rebuscada = ?
+            ) sr ON g.session_id = sr.session_id AND sr.rebuscada = g.rebuscada
+            WHERE g.rebuscada = ?
+            GROUP BY g.session_id
+            ORDER BY g.session_id
+        """, (rebuscada, rebuscada, rebuscada)).fetchall()
+
+        result = []
+        for i, row in enumerate(rows, 1):
+            d = dict(row)
+            # Etiqueta curta per al jugador
+            sid = d['session_id']
+            d['label'] = f"Jugador {i}"
+            d['short_id'] = sid[:8] if len(sid) > 8 else sid
+            result.append(d)
+        return result
+
+
+def get_player_session(rebuscada: str, session_id: str) -> Dict[str, Any]:
+    """Retorna la partida completa d'un jugador per una rebuscada."""
+    with get_db() as conn:
+        guesses = conn.execute("""
+            SELECT paraula, forma_canonica, posicio, es_correcta, timestamp
+            FROM guesses
+            WHERE rebuscada = ? AND session_id = ?
+            ORDER BY timestamp ASC
+        """, (rebuscada, session_id)).fetchall()
+
+        hints = conn.execute("""
+            SELECT paraula_pista, posicio, timestamp
+            FROM hints
+            WHERE rebuscada = ? AND session_id = ?
+            ORDER BY timestamp ASC
+        """, (rebuscada, session_id)).fetchall()
+
+        surrender = conn.execute("""
+            SELECT timestamp FROM surrenders
+            WHERE rebuscada = ? AND session_id = ?
+            LIMIT 1
+        """, (rebuscada, session_id)).fetchone()
+
+        return {
+            "guesses": [dict(r) for r in guesses],
+            "hints": [dict(r) for r in hints],
+            "surrendered": surrender is not None,
+            "surrender_time": dict(surrender)["timestamp"] if surrender else None
+        }
+
+
 def get_completion_distribution(rebuscada: Optional[str] = None) -> List[Dict[str, Any]]:
     """Retorna la distribució d'intents per completar jocs (per gràfic de barres)."""
     with get_db() as conn:
