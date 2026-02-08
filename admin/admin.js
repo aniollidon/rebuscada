@@ -4394,48 +4394,61 @@ async function promptAddNewWord() {
 let statsCharts = {};
 
 function destroyStatsCharts() {
-  Object.values(statsCharts).forEach(c => { try { c.destroy(); } catch(_) {} });
+  Object.values(statsCharts).forEach((c) => {
+    try {
+      c.destroy();
+    } catch (_) {}
+  });
   statsCharts = {};
 }
 
 async function openStatsModal() {
   const modal = new bootstrap.Modal(document.getElementById("statsModal"));
   modal.show();
-  
+
   const body = document.getElementById("stats-body");
-  body.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div><p class="mt-2 text-muted">Carregant estadístiques...</p></div>';
-  
+  body.innerHTML =
+    '<div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div><p class="mt-2 text-muted">Carregant estadístiques...</p></div>';
+
   destroyStatsCharts();
-  
+
   try {
     // Carregar totes les dades en paral·lel
-    const [overviewRes, dailyRes, perGameRes, completionsRes, hintsRes] = await Promise.all([
-      fetch(`${STATS_API}/overview`, { headers: authHeaders() }),
-      fetch(`${STATS_API}/daily?days=30`, { headers: authHeaders() }),
-      fetch(`${STATS_API}/per-game`, { headers: authHeaders() }),
-      fetch(`${STATS_API}/completions`, { headers: authHeaders() }),
-      fetch(`${STATS_API}/hints`, { headers: authHeaders() }),
-    ]);
-    
+    const [overviewRes, dailyRes, perGameRes, completionsRes, hintsRes] =
+      await Promise.all([
+        fetch(`${STATS_API}/overview`, { headers: authHeaders() }),
+        fetch(`${STATS_API}/daily?days=30`, { headers: authHeaders() }),
+        fetch(`${STATS_API}/per-game`, { headers: authHeaders() }),
+        fetch(`${STATS_API}/completions`, { headers: authHeaders() }),
+        fetch(`${STATS_API}/hints`, { headers: authHeaders() }),
+      ]);
+
     if (!overviewRes.ok) throw new Error("Error carregant estadístiques");
-    
+
     const overview = await overviewRes.json();
     const daily = await dailyRes.json();
     const perGame = await perGameRes.json();
     const completions = await completionsRes.json();
     const hints = await hintsRes.json();
-    
+
     renderStatsContent(body, overview, daily, perGame, completions, hints);
   } catch (e) {
-    body.innerHTML = `<div class="alert alert-warning"><i class="bi bi-exclamation-triangle"></i> ${e.message || 'Error carregant estadístiques'}</div>
+    body.innerHTML = `<div class="alert alert-warning"><i class="bi bi-exclamation-triangle"></i> ${e.message || "Error carregant estadístiques"}</div>
     <p class="text-muted">Les estadístiques es comencen a recollir quan els jugadors accedeixen al joc. Si la base de dades és buida, és normal.</p>`;
   }
 }
 
-function renderStatsContent(container, overview, daily, perGame, completions, hints) {
+function renderStatsContent(
+  container,
+  overview,
+  daily,
+  perGame,
+  completions,
+  hints,
+) {
   // Formatadors
-  const pct = (a, b) => b > 0 ? Math.round(a / b * 100) : 0;
-  
+  const pct = (a, b) => (b > 0 ? Math.round((a / b) * 100) : 0);
+
   container.innerHTML = `
     <!-- RESUM -->
     <div class="row g-3 mb-4">
@@ -4513,20 +4526,26 @@ function renderStatsContent(container, overview, daily, perGame, completions, hi
                 </tr>
               </thead>
               <tbody>
-                ${perGame.length === 0 ? '<tr><td colspan="9" class="text-muted text-center">Encara no hi ha dades</td></tr>' : 
-                  perGame.map(g => `
+                ${
+                  perGame.length === 0
+                    ? '<tr><td colspan="9" class="text-muted text-center">Encara no hi ha dades</td></tr>'
+                    : perGame
+                        .map(
+                          (g) => `
                     <tr>
-                      <td><strong>${g.rebuscada}</strong>${g.game_id ? ` <small class="text-muted">#${g.game_id}</small>` : ''}</td>
+                      <td><strong>${g.rebuscada}</strong>${g.game_id ? ` <small class="text-muted">#${g.game_id}</small>` : ""}</td>
                       <td class="text-center">${g.jugadors}</td>
                       <td class="text-center">${g.total_intents}</td>
                       <td class="text-center"><span class="badge bg-success">${g.completions}</span></td>
                       <td class="text-center"><span class="badge bg-danger">${g.surrenders}</span></td>
                       <td class="text-center">${g.hints}</td>
-                      <td class="text-center">${g.avg_intents ? Math.round(g.avg_intents * 10) / 10 : '-'}</td>
-                      <td class="text-center">${g.completion_rate ? g.completion_rate + '%' : '-'}</td>
+                      <td class="text-center">${g.avg_intents ? Math.round(g.avg_intents * 10) / 10 : "-"}</td>
+                      <td class="text-center">${g.completion_rate ? g.completion_rate + "%" : "-"}</td>
                       <td><button class="btn btn-outline-primary btn-sm py-0 px-1" onclick="loadWordsForGame('${g.rebuscada}')" title="Veure paraules jugades"><i class="bi bi-eye"></i></button></td>
                     </tr>
-                  `).join('')
+                  `,
+                        )
+                        .join("")
                 }
               </tbody>
             </table>
@@ -4550,7 +4569,7 @@ function renderStatsContent(container, overview, daily, perGame, completions, hi
       </div>
     </div>
   `;
-  
+
   // Renderitzar gràfics
   renderDailyChart(daily);
   renderCompletionChart(completions);
@@ -4559,94 +4578,106 @@ function renderStatsContent(container, overview, daily, perGame, completions, hi
 function renderDailyChart(daily) {
   const ctx = document.getElementById("stats-daily-chart");
   if (!ctx || !daily.length) return;
-  
-  const labels = daily.map(d => {
-    const parts = d.data.split('-');
-    return parts[2] + '/' + parts[1];
+
+  const labels = daily.map((d) => {
+    const parts = d.data.split("-");
+    return parts[2] + "/" + parts[1];
   });
-  
+
   statsCharts.daily = new Chart(ctx, {
-    type: 'line',
+    type: "line",
     data: {
       labels,
       datasets: [
         {
-          label: 'Visites',
-          data: daily.map(d => d.visits),
-          borderColor: '#4285f4',
-          backgroundColor: 'rgba(66,133,244,0.1)',
+          label: "Visites",
+          data: daily.map((d) => d.visits),
+          borderColor: "#4285f4",
+          backgroundColor: "rgba(66,133,244,0.1)",
           fill: true,
           tension: 0.3,
         },
         {
-          label: 'Jugadors',
-          data: daily.map(d => d.players),
-          borderColor: '#34a853',
-          backgroundColor: 'rgba(52,168,83,0.1)',
+          label: "Jugadors",
+          data: daily.map((d) => d.players),
+          borderColor: "#34a853",
+          backgroundColor: "rgba(52,168,83,0.1)",
           fill: true,
           tension: 0.3,
         },
         {
-          label: 'Completats',
-          data: daily.map(d => d.completions),
-          borderColor: '#fbbc04',
-          backgroundColor: 'rgba(251,188,4,0.1)',
+          label: "Completats",
+          data: daily.map((d) => d.completions),
+          borderColor: "#fbbc04",
+          backgroundColor: "rgba(251,188,4,0.1)",
           fill: true,
           tension: 0.3,
         },
         {
-          label: 'Rendicions',
-          data: daily.map(d => d.surrenders),
-          borderColor: '#ea4335',
-          backgroundColor: 'rgba(234,67,53,0.05)',
+          label: "Rendicions",
+          data: daily.map((d) => d.surrenders),
+          borderColor: "#ea4335",
+          backgroundColor: "rgba(234,67,53,0.05)",
           fill: false,
           tension: 0.3,
           borderDash: [5, 5],
         },
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { position: 'top', labels: { usePointStyle: true, boxWidth: 8 } },
-      },
-      scales: {
-        y: { beginAtZero: true, ticks: { precision: 0 } },
-        x: { ticks: { maxRotation: 45 } },
-      },
-      interaction: { intersect: false, mode: 'index' },
-    }
-  });
-}
-
-function renderCompletionChart(completions) {
-  const ctx = document.getElementById("stats-completion-chart");
-  if (!ctx || !completions.length) return;
-  
-  const colors = ['#34a853', '#4285f4', '#fbbc04', '#ff6d01', '#ea4335', '#9334e6'];
-  
-  statsCharts.completions = new Chart(ctx, {
-    type: 'doughnut',
-    data: {
-      labels: completions.map(c => c.rang + ' intents'),
-      datasets: [{
-        data: completions.map(c => c.jugadors),
-        backgroundColor: colors.slice(0, completions.length),
-        borderWidth: 2,
-        borderColor: '#fff',
-      }]
+      ],
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
         legend: {
-          position: 'bottom',
+          position: "top",
+          labels: { usePointStyle: true, boxWidth: 8 },
+        },
+      },
+      scales: {
+        y: { beginAtZero: true, ticks: { precision: 0 } },
+        x: { ticks: { maxRotation: 45 } },
+      },
+      interaction: { intersect: false, mode: "index" },
+    },
+  });
+}
+
+function renderCompletionChart(completions) {
+  const ctx = document.getElementById("stats-completion-chart");
+  if (!ctx || !completions.length) return;
+
+  const colors = [
+    "#34a853",
+    "#4285f4",
+    "#fbbc04",
+    "#ff6d01",
+    "#ea4335",
+    "#9334e6",
+  ];
+
+  statsCharts.completions = new Chart(ctx, {
+    type: "doughnut",
+    data: {
+      labels: completions.map((c) => c.rang + " intents"),
+      datasets: [
+        {
+          data: completions.map((c) => c.jugadors),
+          backgroundColor: colors.slice(0, completions.length),
+          borderWidth: 2,
+          borderColor: "#fff",
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: "bottom",
           labels: { usePointStyle: true, boxWidth: 8, font: { size: 11 } },
         },
       },
-    }
+    },
   });
 }
 
@@ -4654,59 +4685,68 @@ async function loadWordsForGame(rebuscada) {
   const detail = document.getElementById("stats-words-detail");
   const title = document.getElementById("stats-words-title");
   const tableDiv = document.getElementById("stats-words-table");
-  
+
   if (!detail) return;
-  
+
   detail.style.display = "block";
   title.textContent = rebuscada;
-  tableDiv.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div></div>';
-  
+  tableDiv.innerHTML =
+    '<div class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div></div>';
+
   // Destruir gràfic anterior si existeix
-  if (statsCharts.words) { statsCharts.words.destroy(); delete statsCharts.words; }
-  
+  if (statsCharts.words) {
+    statsCharts.words.destroy();
+    delete statsCharts.words;
+  }
+
   try {
-    const res = await fetch(`${STATS_API}/words/${encodeURIComponent(rebuscada)}`, { headers: authHeaders() });
+    const res = await fetch(
+      `${STATS_API}/words/${encodeURIComponent(rebuscada)}`,
+      { headers: authHeaders() },
+    );
     if (!res.ok) throw new Error();
     const words = await res.json();
-    
+
     if (!words.length) {
       tableDiv.innerHTML = '<p class="text-muted">Sense dades</p>';
       return;
     }
-    
+
     // Gràfic de barres amb les top 20 paraules
     const top = words.slice(0, 20);
     const ctx = document.getElementById("stats-words-chart");
-    
+
     statsCharts.words = new Chart(ctx, {
-      type: 'bar',
+      type: "bar",
       data: {
-        labels: top.map(w => w.paraula),
-        datasets: [{
-          label: 'Vegades jugada',
-          data: top.map(w => w.vegades),
-          backgroundColor: top.map(w => {
-            const p = w.millor_posicio;
-            if (p < 100) return 'rgba(52,168,83,0.7)';
-            if (p < 250) return 'rgba(251,188,4,0.7)';
-            if (p < 500) return 'rgba(255,109,1,0.7)';
-            return 'rgba(234,67,53,0.7)';
-          }),
-          borderRadius: 3,
-        }]
+        labels: top.map((w) => w.paraula),
+        datasets: [
+          {
+            label: "Vegades jugada",
+            data: top.map((w) => w.vegades),
+            backgroundColor: top.map((w) => {
+              const p = w.millor_posicio;
+              if (p < 100) return "rgba(52,168,83,0.7)";
+              if (p < 250) return "rgba(251,188,4,0.7)";
+              if (p < 500) return "rgba(255,109,1,0.7)";
+              return "rgba(234,67,53,0.7)";
+            }),
+            borderRadius: 3,
+          },
+        ],
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        indexAxis: 'y',
+        indexAxis: "y",
         plugins: { legend: { display: false } },
         scales: {
           x: { beginAtZero: true, ticks: { precision: 0 } },
           y: { ticks: { font: { size: 11 } } },
         },
-      }
+      },
     });
-    
+
     // Taula completa
     tableDiv.innerHTML = `
       <table class="table table-sm table-hover mb-0" style="font-size:12px;">
@@ -4714,16 +4754,20 @@ async function loadWordsForGame(rebuscada) {
           <th>Paraula</th><th class="text-center">Vegades</th><th class="text-center">Millor pos.</th>
         </tr></thead>
         <tbody>
-          ${words.map(w => `<tr>
+          ${words
+            .map(
+              (w) => `<tr>
             <td>${w.paraula}</td>
             <td class="text-center">${w.vegades}</td>
             <td class="text-center" style="color:${colorPerPos(w.millor_posicio)}">${w.millor_posicio}</td>
-          </tr>`).join('')}
+          </tr>`,
+            )
+            .join("")}
         </tbody>
       </table>`;
-    
+
     // Scroll a la secció
-    detail.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    detail.scrollIntoView({ behavior: "smooth", block: "nearest" });
   } catch (e) {
     tableDiv.innerHTML = '<p class="text-danger">Error carregant dades</p>';
   }

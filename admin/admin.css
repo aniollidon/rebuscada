@@ -92,7 +92,9 @@
   margin: 0 2px;
   cursor: pointer;
   border: 2px solid transparent;
-  transition: background 0.15s, border 0.15s;
+  transition:
+    background 0.15s,
+    border 0.15s;
   font-size: smaller;
 }
 .list-item.selected {
@@ -148,7 +150,10 @@
   font-size: 14px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
   border: 1px solid #e9ecef;
-  transition: box-shadow 0.15s, background 0.15s, opacity 0.15s;
+  transition:
+    box-shadow 0.15s,
+    background 0.15s,
+    opacity 0.15s;
 }
 .word-item.draggable {
   cursor: grab;
@@ -424,7 +429,9 @@
   border-radius: 6px;
   border: 1px solid #e9ecef;
   cursor: pointer;
-  transition: background-color 0.2s, border-color 0.2s;
+  transition:
+    background-color 0.2s,
+    border-color 0.2s;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -496,43 +503,57 @@
   background: linear-gradient(135deg, #e8f0fe 0%, #d2e3fc 100%);
   border-color: #a8c7fa;
 }
-.stats-card-blue .stats-card-number { color: #1a73e8; }
+.stats-card-blue .stats-card-number {
+  color: #1a73e8;
+}
 
 .stats-card-green {
   background: linear-gradient(135deg, #e6f4ea 0%, #ceead6 100%);
   border-color: #a8dab5;
 }
-.stats-card-green .stats-card-number { color: #1e8e3e; }
+.stats-card-green .stats-card-number {
+  color: #1e8e3e;
+}
 
 .stats-card-purple {
   background: linear-gradient(135deg, #f3e8fd 0%, #e8d5f5 100%);
   border-color: #d7aefb;
 }
-.stats-card-purple .stats-card-number { color: #8430ce; }
+.stats-card-purple .stats-card-number {
+  color: #8430ce;
+}
 
 .stats-card-orange {
   background: linear-gradient(135deg, #fef7e0 0%, #feefc3 100%);
   border-color: #fdd663;
 }
-.stats-card-orange .stats-card-number { color: #e37400; }
+.stats-card-orange .stats-card-number {
+  color: #e37400;
+}
 
 .stats-card-teal {
   background: linear-gradient(135deg, #e0f7fa 0%, #b2ebf2 100%);
   border-color: #80deea;
 }
-.stats-card-teal .stats-card-number { color: #00838f; }
+.stats-card-teal .stats-card-number {
+  color: #00838f;
+}
 
 .stats-card-pink {
   background: linear-gradient(135deg, #fce4ec 0%, #f8bbd0 100%);
   border-color: #f48fb1;
 }
-.stats-card-pink .stats-card-number { color: #c2185b; }
+.stats-card-pink .stats-card-number {
+  color: #c2185b;
+}
 
 .stats-card-gray {
   background: linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%);
   border-color: #bdbdbd;
 }
-.stats-card-gray .stats-card-number { color: #424242; }
+.stats-card-gray .stats-card-number {
+  color: #424242;
+}
 
 .stats-chart-container {
   background: #fff;
