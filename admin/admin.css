@@ -259,6 +259,7 @@
 }
 
 /* Configuració general */
+#stats-btn,
 #settings-btn,
 #calendar-btn {
   margin-top: 8px;
