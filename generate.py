@@ -47,6 +47,9 @@ def main():
     parser.add_argument("--freq-min", type=int, default=20, help="Freqüència mínima per filtrar paraules")
     parser.add_argument("--freq-min-rand", type=int, default=-1, help="Freqüència mínima per proposar paraules aleatòries")
     parser.add_argument("--algorisme", type=str, choices=['fasttext', 'sota', 'openai'], default='fasttext', help="Algorisme a utilitzar: 'fasttext', 'sota' (Sentence Transformers) o 'openai' (text-embedding-3-large)")
+    parser.add_argument("--filtre-creuat", action="store_true", help="Aplica filtre creuat OpenAI: penalitza paraules amb alta similitud FastText però baixa similitud OpenAI (soroll de subwords). Requereix cache OpenAI.")
+    parser.add_argument("--filtre-factor-min", type=float, default=0.1, help="Factor mínim de penalització del filtre creuat (0.0-1.0, defecte: 0.1). Com més baix, més agressiu.")
+    parser.add_argument("--filtre-nucli", type=int, default=15, help="Nombre de paraules del nucli semàntic per al filtre creuat (defecte: 15)")
 
     args = parser.parse_args()
 
@@ -79,6 +82,18 @@ def main():
     
     paraules = dicc.totes_les_lemes(freq_min=args.freq_min)
 
+    # Preparar arguments del filtre creuat OpenAI (només FastText)
+    filtre_kwargs = {}
+    if args.filtre_creuat and args.algorisme == 'fasttext':
+        filtre_kwargs = {
+            'filtre_coherencia': True,
+            'n_core': args.filtre_nucli,
+            'factor_penalitzacio': args.filtre_factor_min,
+        }
+        print(f"Filtre creuat OpenAI activat (nucli={args.filtre_nucli}, factor_min={args.filtre_factor_min})")
+    elif args.filtre_creuat and args.algorisme != 'fasttext':
+        print("AVÍS: El filtre creuat només funciona amb l'algorisme FastText. S'ignorarà.")
+
     # Si s'ha especificat --paraula (pot ser llista separada per comes)
     if args.paraula:
         paraules_input = [p.strip() for p in args.paraula.split(',') if p.strip()]
@@ -104,7 +119,7 @@ def main():
                 if args.algorisme == 'openai':
                     ranking = calcular_ranking_fn(p, paraules)
                 else:
-                    ranking = calcular_ranking_fn(p, paraules, MODEL)
+                    ranking = calcular_ranking_fn(p, paraules, MODEL, **filtre_kwargs)
                 print(f"Guardant rànquing a {output_path}")
                 with open(output_path, "w", encoding="utf-8") as f:
                     json.dump(ranking, f, ensure_ascii=False, indent=2)
@@ -121,7 +136,7 @@ def main():
             if args.algorisme == 'openai':
                 ranking = calcular_ranking_fn(paraula_random, paraules)
             else:
-                ranking = calcular_ranking_fn(paraula_random, paraules, MODEL)
+                ranking = calcular_ranking_fn(paraula_random, paraules, MODEL, **filtre_kwargs)
             print(f"Guardant rànquing a {output_path}")
             with open(output_path, "w", encoding="utf-8") as f:
                 json.dump(ranking, f, ensure_ascii=False, indent=2)

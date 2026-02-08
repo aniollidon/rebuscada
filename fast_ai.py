@@ -5,11 +5,9 @@ import os
 load_dotenv()
 
 
-def gpt_api(messages: list, model: str = "gpt-3.5-turbo"):
+def gpt_api(messages: list, model: str = "gpt-5-mini"):
     client = OpenAI(
-        # defaults to os.environ.get("OPENAI_API_KEY")
-        api_key=os.environ.get("CHATANYWHERE_API_KEY"),
-        base_url="https://api.chatanywhere.tech/v1",
+        api_key=os.environ.get("OPENAI_API_KEY"),
     )
     completion = client.chat.completions.create(model=model, messages=messages)
     return completion.choices[0].message.content
@@ -26,7 +24,7 @@ def fast_ai(content: str):
         {"role": "system", "content": "Ets un assistent lingüístic català molt estricte amb el format."},
         {"role": "user", "content": content + base_content},
     ]
-    model = os.environ.get("CHATANYWHERE_MODEL", "gpt-3.5-turbo")
+    model = os.environ.get("OPENAI_MODEL", "gpt-5-mini")
     return gpt_api(messages, model=model)
 
 if __name__ == "__main__":
