@@ -4403,7 +4403,9 @@ function destroyStatsCharts() {
 }
 
 async function openStatsModal() {
-  const modal = new bootstrap.Modal(document.getElementById("statsModal"));
+  const modal = bootstrap.Modal.getOrCreateInstance(
+    document.getElementById("statsModal"),
+  );
   modal.show();
 
   const body = document.getElementById("stats-body");
@@ -4494,13 +4496,13 @@ function renderStatsContent(
       <div class="col-md-8">
         <div class="stats-chart-container">
           <h6 class="mb-2"><i class="bi bi-graph-up"></i> Activitat diària (últims 30 dies)</h6>
-          <canvas id="stats-daily-chart" height="250"></canvas>
+          <div style="position:relative;height:250px"><canvas id="stats-daily-chart"></canvas></div>
         </div>
       </div>
       <div class="col-md-4">
         <div class="stats-chart-container">
           <h6 class="mb-2"><i class="bi bi-pie-chart"></i> Distribució d'intents</h6>
-          <canvas id="stats-completion-chart" height="250"></canvas>
+          <div style="position:relative;height:250px"><canvas id="stats-completion-chart"></canvas></div>
         </div>
       </div>
     </div>
@@ -4560,7 +4562,7 @@ function renderStatsContent(
         <h6 class="mb-2"><i class="bi bi-chat-dots"></i> Paraules jugades per: <strong id="stats-words-title"></strong></h6>
         <div class="row g-3">
           <div class="col-md-7">
-            <canvas id="stats-words-chart" height="300"></canvas>
+            <div style="position:relative;height:300px"><canvas id="stats-words-chart"></canvas></div>
           </div>
           <div class="col-md-5">
             <div id="stats-words-table" style="max-height:300px; overflow-y:auto;"></div>
