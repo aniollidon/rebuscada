@@ -232,6 +232,7 @@ app.add_middleware(
 
 class AiGenerateRequest(BaseModel):
     prompt: str
+    backend: str | None = None
 class MoveRequest(BaseModel):
     from_pos: int
     to_pos: int
@@ -653,8 +654,8 @@ def ai_generate(req: AiGenerateRequest, _: None = Depends(require_auth)):
         raise HTTPException(status_code=422, detail="Prompt buit")
 
     try:
-        logging.info("/api/ai-generate: prompt len=%d, sample=%r", len(prompt), prompt[:200])
-        raw = run_fast_ai(prompt)
+        logging.info("/api/ai-generate: prompt len=%d, backend=%s, sample=%r", len(prompt), req.backend, prompt[:200])
+        raw = run_fast_ai(prompt, backend=req.backend)
         if not isinstance(raw, str):
             raise RuntimeError("Resposta AI inesperada")
 

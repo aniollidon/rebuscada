@@ -1367,6 +1367,13 @@ function openAiSearchModal(targetTextarea) {
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tanca"></button>
           </div>
           <div class="modal-body">
+            <label class="form-label">Backend AI</label>
+            <select class="form-select mb-3" id="ai-backend-select">
+              <option value="">Per defecte (servidor)</option>
+              <option value="OPENAI">OpenAI</option>
+              <option value="CHATANYWHERE">ChatAnywhere</option>
+              <option value="GEMINI">Gemini</option>
+            </select>
             <label class="form-label">Prompt</label>
             <textarea class="form-control" id="ai-prompt-input" rows="4">${defaultPrompt}</textarea>
             <div class="form-text">Modifica el prompt per especificar el concepte abans d'enviar.</div>
@@ -1392,9 +1399,12 @@ function openAiSearchModal(targetTextarea) {
   const sendBtn = document.getElementById("ai-send-btn");
 
   let sending = false;
+  const backendSelect = document.getElementById("ai-backend-select");
+
   sendBtn.onclick = async () => {
     if (sending) return;
     const prompt = (promptEl.value || "").trim();
+    const backend = backendSelect.value || undefined;
     errorEl.style.display = "none";
     errorEl.textContent = "";
 
@@ -1412,7 +1422,7 @@ function openAiSearchModal(targetTextarea) {
       const res = await fetch(AI_GENERATE_ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify({ prompt, backend }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: "Error" }));
@@ -1453,6 +1463,13 @@ function openAiSearchModalWithPrompt(targetTextarea, preparedPrompt) {
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tanca"></button>
           </div>
           <div class="modal-body">
+            <label class="form-label">Backend AI</label>
+            <select class="form-select mb-3" id="ai-backend-select">
+              <option value="">Per defecte (servidor)</option>
+              <option value="OPENAI">OpenAI</option>
+              <option value="CHATANYWHERE">ChatAnywhere</option>
+              <option value="GEMINI">Gemini</option>
+            </select>
             <label class="form-label">Prompt</label>
             <textarea class="form-control" id="ai-prompt-input" rows="6">${preparedPrompt}</textarea>
             <div class="form-text">Pots editar el prompt abans d'enviar.</div>
@@ -1477,10 +1494,13 @@ function openAiSearchModalWithPrompt(targetTextarea, preparedPrompt) {
   const errorEl = document.getElementById("ai-error");
   const sendBtn = document.getElementById("ai-send-btn");
 
+  const backendSelect = document.getElementById("ai-backend-select");
+
   let sending = false;
   sendBtn.onclick = async () => {
     if (sending) return;
     const prompt = (promptEl.value || "").trim();
+    const backend = backendSelect.value || undefined;
     errorEl.style.display = "none";
     errorEl.textContent = "";
 
@@ -1497,7 +1517,7 @@ function openAiSearchModalWithPrompt(targetTextarea, preparedPrompt) {
       const res = await fetch(AI_GENERATE_ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify({ prompt, backend }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: "Error" }));
