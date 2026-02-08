@@ -4808,6 +4808,7 @@ async function loadPlayersForGame(rebuscada) {
 
     // Agrupar jugadors per dia (a partir de primer_intent)
     const grouped = {};
+    const dayOrder = [];
     players.forEach((p) => {
       let dayKey = "Desconegut";
       if (p.primer_intent) {
@@ -4823,51 +4824,79 @@ async function loadPlayersForGame(rebuscada) {
           dayKey = p.primer_intent.substring(0, 10);
         }
       }
-      if (!grouped[dayKey]) grouped[dayKey] = [];
+      if (!grouped[dayKey]) {
+        grouped[dayKey] = [];
+        dayOrder.push(dayKey);
+      }
       grouped[dayKey].push(p);
     });
 
-    let html = "";
-    Object.entries(grouped).forEach(([day, dayPlayers]) => {
-      html += `<div class="mb-2">`;
-      html += `<div class="text-muted small fw-bold mb-1"><i class="bi bi-calendar3"></i> ${day} <span class="badge bg-light text-dark">${dayPlayers.length}</span></div>`;
-      html += `<div class="d-flex flex-wrap gap-2">`;
-      dayPlayers.forEach((p) => {
-        const badge = p.ha_completat
-          ? "bg-success"
-          : p.es_rendicio
-            ? "bg-danger"
-            : "bg-secondary";
-        const icon = p.ha_completat
-          ? "check-circle"
-          : p.es_rendicio
-            ? "x-circle"
-            : "hourglass-split";
-        html += `<button class="btn btn-sm btn-outline-secondary player-session-btn" 
-          data-session="${p.session_id}" data-rebuscada="${rebuscada}"
-          title="${p.short_id} — ${p.num_intents} intents, ${p.num_pistes} pistes">
-          <i class="bi bi-${icon} text-${p.ha_completat ? "success" : p.es_rendicio ? "danger" : "warning"}"></i>
-          ${p.label}
-          <span class="badge ${badge} ms-1">${p.num_intents}</span>
-        </button>`;
-      });
-      html += `</div></div>`;
-    });
+    // Selector de dia + contenidor de jugadors
+    let html = `<div class="d-flex align-items-center gap-2 mb-2">
+      <select id="stats-day-select" class="form-select form-select-sm" style="width:auto;min-width:180px;">
+        ${dayOrder.map((day) => `<option value="${day}">${day} (${grouped[day].length})</option>`).join("")}
+      </select>
+      <span id="stats-day-summary" class="text-muted small"></span>
+    </div>
+    <div id="stats-day-players" class="d-flex flex-wrap gap-2"></div>`;
     container.innerHTML = html;
 
-    // Bind clicks
-    container.querySelectorAll(".player-session-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        container
-          .querySelectorAll(".player-session-btn")
-          .forEach((b) => b.classList.remove("active"));
-        btn.classList.add("active");
-        loadPlayerSession(
-          btn.dataset.rebuscada,
-          btn.dataset.session,
-          btn.textContent.trim().split("\n")[0],
-        );
+    const daySelect = document.getElementById("stats-day-select");
+    const playersDiv = document.getElementById("stats-day-players");
+    const summarySpan = document.getElementById("stats-day-summary");
+
+    function renderDayPlayers(dayKey) {
+      const dayPlayers = grouped[dayKey] || [];
+      const completed = dayPlayers.filter((p) => p.ha_completat).length;
+      const surrendered = dayPlayers.filter((p) => p.es_rendicio).length;
+      summarySpan.innerHTML = `<span class="badge bg-success">${completed} <i class="bi bi-check-circle"></i></span> <span class="badge bg-danger">${surrendered} <i class="bi bi-x-circle"></i></span> <span class="badge bg-secondary">${dayPlayers.length - completed - surrendered} <i class="bi bi-hourglass-split"></i></span>`;
+
+      playersDiv.innerHTML = dayPlayers
+        .map((p) => {
+          const badge = p.ha_completat
+            ? "bg-success"
+            : p.es_rendicio
+              ? "bg-danger"
+              : "bg-secondary";
+          const icon = p.ha_completat
+            ? "check-circle"
+            : p.es_rendicio
+              ? "x-circle"
+              : "hourglass-split";
+          return `<button class="btn btn-sm btn-outline-secondary player-session-btn" 
+            data-session="${p.session_id}" data-rebuscada="${rebuscada}"
+            title="${p.short_id} — ${p.num_intents} intents, ${p.num_pistes} pistes">
+            <i class="bi bi-${icon} text-${p.ha_completat ? "success" : p.es_rendicio ? "danger" : "warning"}"></i>
+            ${p.label}
+            <span class="badge ${badge} ms-1">${p.num_intents}</span>
+          </button>`;
+        })
+        .join("");
+
+      // Bind clicks als botons del dia
+      playersDiv.querySelectorAll(".player-session-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          playersDiv
+            .querySelectorAll(".player-session-btn")
+            .forEach((b) => b.classList.remove("active"));
+          btn.classList.add("active");
+          loadPlayerSession(
+            btn.dataset.rebuscada,
+            btn.dataset.session,
+            btn.textContent.trim().split("\n")[0],
+          );
+        });
       });
+    }
+
+    // Seleccionar l'últim dia per defecte
+    daySelect.value = dayOrder[dayOrder.length - 1];
+    renderDayPlayers(daySelect.value);
+
+    daySelect.addEventListener("change", () => {
+      renderDayPlayers(daySelect.value);
+      const sessionDiv = document.getElementById("stats-player-session");
+      if (sessionDiv) sessionDiv.style.display = "none";
     });
   } catch (e) {
     container.innerHTML =
