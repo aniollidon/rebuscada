@@ -4806,31 +4806,54 @@ async function loadPlayersForGame(rebuscada) {
       return;
     }
 
-    container.innerHTML = `
-      <div class="d-flex flex-wrap gap-2">
-        ${players
-          .map((p) => {
-            const badge = p.ha_completat
-              ? "bg-success"
-              : p.es_rendicio
-                ? "bg-danger"
-                : "bg-secondary";
-            const icon = p.ha_completat
-              ? "check-circle"
-              : p.es_rendicio
-                ? "x-circle"
-                : "hourglass-split";
-            return `<button class="btn btn-sm btn-outline-secondary player-session-btn" 
-            data-session="${p.session_id}" data-rebuscada="${rebuscada}"
-            title="${p.short_id} — ${p.num_intents} intents, ${p.num_pistes} pistes">
-            <i class="bi bi-${icon} text-${p.ha_completat ? "success" : p.es_rendicio ? "danger" : "warning"}"></i>
-            ${p.label}
-            <span class="badge ${badge} ms-1">${p.num_intents}</span>
-          </button>`;
-          })
-          .join("")}
-      </div>
-    `;
+    // Agrupar jugadors per dia (a partir de primer_intent)
+    const grouped = {};
+    players.forEach((p) => {
+      let dayKey = "Desconegut";
+      if (p.primer_intent) {
+        try {
+          const d = new Date(p.primer_intent);
+          dayKey = d.toLocaleDateString("ca", {
+            weekday: "short",
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+          });
+        } catch {
+          dayKey = p.primer_intent.substring(0, 10);
+        }
+      }
+      if (!grouped[dayKey]) grouped[dayKey] = [];
+      grouped[dayKey].push(p);
+    });
+
+    let html = "";
+    Object.entries(grouped).forEach(([day, dayPlayers]) => {
+      html += `<div class="mb-2">`;
+      html += `<div class="text-muted small fw-bold mb-1"><i class="bi bi-calendar3"></i> ${day} <span class="badge bg-light text-dark">${dayPlayers.length}</span></div>`;
+      html += `<div class="d-flex flex-wrap gap-2">`;
+      dayPlayers.forEach((p) => {
+        const badge = p.ha_completat
+          ? "bg-success"
+          : p.es_rendicio
+            ? "bg-danger"
+            : "bg-secondary";
+        const icon = p.ha_completat
+          ? "check-circle"
+          : p.es_rendicio
+            ? "x-circle"
+            : "hourglass-split";
+        html += `<button class="btn btn-sm btn-outline-secondary player-session-btn" 
+          data-session="${p.session_id}" data-rebuscada="${rebuscada}"
+          title="${p.short_id} — ${p.num_intents} intents, ${p.num_pistes} pistes">
+          <i class="bi bi-${icon} text-${p.ha_completat ? "success" : p.es_rendicio ? "danger" : "warning"}"></i>
+          ${p.label}
+          <span class="badge ${badge} ms-1">${p.num_intents}</span>
+        </button>`;
+      });
+      html += `</div></div>`;
+    });
+    container.innerHTML = html;
 
     // Bind clicks
     container.querySelectorAll(".player-session-btn").forEach((btn) => {
@@ -4885,18 +4908,26 @@ async function loadPlayerSession(rebuscada, sessionId, playerLabel) {
       return;
     }
 
-    // Format hora
+    // Format data i hora
     const fmtTime = (ts) => {
       if (!ts) return "";
       try {
         const d = new Date(ts);
-        return d.toLocaleTimeString("ca", {
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-        });
+        return (
+          d.toLocaleDateString("ca", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+          }) +
+          " " +
+          d.toLocaleTimeString("ca", {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+          })
+        );
       } catch {
-        return ts.split("T")[1]?.substring(0, 8) || "";
+        return ts.replace("T", " ").substring(0, 19) || "";
       }
     };
 
@@ -4905,7 +4936,7 @@ async function loadPlayerSession(rebuscada, sessionId, playerLabel) {
     html +=
       '<table class="table table-sm mb-0" style="font-size:12px;"><thead class="table-light sticky-top"><tr>';
     html +=
-      '<th style="width:30px">#</th><th>Acció</th><th>Paraula</th><th class="text-center">Posició</th><th>Hora</th></tr></thead><tbody>';
+      '<th style="width:30px">#</th><th>Acció</th><th>Paraula</th><th class="text-center">Posició</th><th>Data i hora</th></tr></thead><tbody>';
 
     let guessNum = 0;
     timeline.forEach((ev) => {
