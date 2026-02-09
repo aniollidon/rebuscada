@@ -700,10 +700,14 @@ function renderCalendarList() {
 
       const gameDate = getGameDate(game.id);
       const dies = game.dies || 1;
-      const diesBadge =
-        dies === 7
-          ? '<span class="badge bg-info text-dark" style="font-size: 10px; padding: 2px 4px;" title="Setmanal (7 dies)">7d</span>'
-          : '<span class="badge bg-secondary" style="font-size: 10px; padding: 2px 4px;" title="Diari (1 dia)">1d</span>';
+      const diesBadgeColor =
+        dies === 1
+          ? "bg-secondary"
+          : dies === 7
+            ? "bg-info text-dark"
+            : "bg-primary";
+      const diesBadgeTitle = dies === 1 ? "Diari (1 dia)" : `${dies} dies`;
+      const diesBadge = `<span class="badge ${diesBadgeColor}" style="font-size: 10px; padding: 2px 4px;" title="${diesBadgeTitle}">${dies}d</span>`;
       return `
       <div class="d-flex align-items-center gap-2 mb-2 p-2 border rounded ${bgClass}" data-cal-idx="${idx}">
         <span class="text-muted" style="min-width: 40px;">${game.id}.</span>
@@ -719,8 +723,7 @@ function renderCalendarList() {
           ${availableWords.map((w) => `<option value="${w}">`).join("")}
         </datalist>
         <select class="form-select form-select-sm calendar-dies-select" data-cal-idx="${idx}" style="width: 60px; min-width: 60px;" title="Durada del joc en dies">
-          <option value="1" ${dies === 1 ? "selected" : ""}>1d</option>
-          <option value="7" ${dies === 7 ? "selected" : ""}>7d</option>
+          ${[1, 2, 3, 4, 5, 6, 7].map((d) => `<option value="${d}" ${dies === d ? "selected" : ""}>${d}d</option>`).join("")}
         </select>
         ${
           isDuplicate
