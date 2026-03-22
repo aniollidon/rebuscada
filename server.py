@@ -886,15 +886,13 @@ async def join_competition(comp_id: str, request: JoinCompetitionRequest):
     
     competition = competitions[comp_id]
     
-    # Comprovar si el nom ja està ocupat
+    # Comprovar si el nom ja existeix
     now = datetime.now().isoformat()
     if request.nom_jugador in competition.jugadors:
-        # Nom ja ocupat per un altre jugador
-        logger.warning(f"COMPETITION: Player name '{request.nom_jugador}' already exists in {comp_id}")
-        raise HTTPException(
-            status_code=409, 
-            detail=f"El nom '{request.nom_jugador}' ja està ocupat en aquesta competició. Tria un altre nom."
-        )
+        # Jugador ja existent - permetre reincorporació (recuperar sessió)
+        logger.info(f"COMPETITION: Player '{request.nom_jugador}' rejoining {comp_id}")
+        # Notificar altres jugadors (per refrescar l'estat)
+        await broadcast_competition_update(comp_id)
     else:
         # Nou jugador
         intents_count = len(request.intents_existents) if request.intents_existents else 0
