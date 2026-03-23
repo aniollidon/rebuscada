@@ -75,6 +75,7 @@ class PlayerState(BaseModel):
     estat_joc: str = "jugant"  # "jugant", "guanyat" o "rendit"
     millor_posicio: Optional[int] = None  # Millor posició aconseguida
     ultima_actualitzacio: str
+    paraules: List[Dict] = []  # Paraules provades: [{paraula, posicio, es_pista}]
 
 class CompetitionState(BaseModel):
     comp_id: str
@@ -98,6 +99,7 @@ class CreateCompetitionResponse(BaseModel):
 class JoinCompetitionRequest(BaseModel):
     nom_jugador: str
     intents_existents: Optional[List[Dict]] = None
+    paraula_verificacio: Optional[str] = None  # Per verificar identitat si el nom ja existeix
 
 class JoinCompetitionResponse(BaseModel):
     comp_id: str
@@ -445,6 +447,15 @@ async def guess(request: GuessRequest, raw_request: Request):
                 )
             except Exception as e:
                 logger.warning(f"Error registrant estadística de guess directe: {e}")
+            # Si és una competició, actualitzar estat (guess directe)
+            if request.comp_id and request.nom_jugador:
+                await actualitzar_progres_competicio(
+                    request.comp_id,
+                    request.nom_jugador,
+                    posicio=rank_directe,
+                    estat_joc="guanyat" if es_correcta_directe else None,
+                    paraula=paraula_introduida
+                )
             return GuessResponse(
                 paraula=paraula_introduida,
                 forma_canonica=None,
@@ -475,7 +486,8 @@ async def guess(request: GuessRequest, raw_request: Request):
             request.comp_id, 
             request.nom_jugador, 
             posicio=rank,
-            estat_joc="guanyat" if es_correcta else None
+            estat_joc="guanyat" if es_correcta else None,
+            paraula=forma_canonica or paraula_introduida
         )
     
     # Registrar estadístiques
@@ -599,7 +611,9 @@ async def donar_pista(request: PistaRequest, raw_request: Request):
             request.comp_id, 
             request.nom_jugador, 
             incrementar_pistes=True,
-            posicio=ranking_diccionari[paraula_pista]
+            posicio=ranking_diccionari[paraula_pista],
+            paraula=paraula_pista,
+            es_pista=True
         )
     
     # Registrar estadística de pista
@@ -748,12 +762,16 @@ async def actualitzar_progres_competicio(
     nom_jugador: str, 
     incrementar_pistes: bool = False,
     posicio: Optional[int] = None,
-    estat_joc: Optional[str] = None
+    estat_joc: Optional[str] = None,
+    paraula: Optional[str] = None,
+    es_pista: bool = False
 ):
     """Actualitza el progrés d'un jugador en una competició
     
     Args:
         estat_joc: "guanyat", "rendit" o None (per mantenir estat actual)
+        paraula: La paraula provada (per guardar-la)
+        es_pista: Si la paraula és una pista
     """
     if comp_id not in competitions:
         return
@@ -772,6 +790,14 @@ async def actualitzar_progres_competicio(
     
     if estat_joc is not None:
         player.estat_joc = estat_joc
+    
+    # Guardar paraula provada
+    if paraula and posicio is not None:
+        player.paraules.append({
+            "paraula": paraula,
+            "posicio": posicio,
+            "es_pista": es_pista
+        })
     
     # Actualitzar millor posició
     if posicio is not None:
@@ -802,7 +828,8 @@ async def broadcast_competition_update(comp_id: str):
                 "intents": player.intents,
                 "pistes": player.pistes,
                 "estat_joc": player.estat_joc,
-                "millor_posicio": player.millor_posicio
+                "millor_posicio": player.millor_posicio,
+                "paraules": player.paraules
             }
             for player in competition.jugadors.values()
         ]
@@ -838,10 +865,17 @@ async def create_competition(request: CreateCompetitionRequest):
         # Calcular intents i millor posició dels intents existents
         intents_count = len(request.intents_existents) if request.intents_existents else 0
         millor_pos = None
+        paraules_inicials = []
         if request.intents_existents:
             posicions = [intent.get('posicio') for intent in request.intents_existents if 'posicio' in intent]
             if posicions:
                 millor_pos = min(posicions)
+            for intent in request.intents_existents:
+                paraules_inicials.append({
+                    "paraula": intent.get("forma_canonica") or intent.get("paraula", ""),
+                    "posicio": intent.get("posicio", 0),
+                    "es_pista": intent.get("es_pista", False)
+                })
         
         player_state = PlayerState(
             nom=request.nom_creador,
@@ -849,7 +883,8 @@ async def create_competition(request: CreateCompetitionRequest):
             pistes=0,
             estat_joc="jugant",
             millor_posicio=millor_pos,
-            ultima_actualitzacio=now
+            ultima_actualitzacio=now,
+            paraules=paraules_inicials
         )
         
         competition = CompetitionState(
@@ -889,8 +924,43 @@ async def join_competition(comp_id: str, request: JoinCompetitionRequest):
     # Comprovar si el nom ja existeix
     now = datetime.now().isoformat()
     if request.nom_jugador in competition.jugadors:
-        # Jugador ja existent - permetre reincorporació (recuperar sessió)
-        logger.info(f"COMPETITION: Player '{request.nom_jugador}' rejoining {comp_id}")
+        existing_player = competition.jugadors[request.nom_jugador]
+        
+        if existing_player.paraules:
+            # Jugador té paraules - requereix verificació
+            if not request.paraula_verificacio:
+                logger.info(f"COMPETITION: Name '{request.nom_jugador}' already taken in {comp_id}, verification required")
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "message": "El nom ja està en ús en aquesta competició",
+                        "nom_existent": True,
+                        "te_paraules": True
+                    }
+                )
+            # Verificar la paraula
+            paraula_verificacio_norm = Diccionari.normalitzar_paraula(request.paraula_verificacio)
+            paraules_jugador = [Diccionari.normalitzar_paraula(p.get("paraula", "")) for p in existing_player.paraules]
+            if paraula_verificacio_norm not in paraules_jugador:
+                logger.info(f"COMPETITION: Wrong verification for '{request.nom_jugador}' in {comp_id}")
+                raise HTTPException(
+                    status_code=403,
+                    detail="La paraula de verificació no és correcta"
+                )
+            # Verificació correcta - permetre reincorporació
+            logger.info(f"COMPETITION: Player '{request.nom_jugador}' verified and rejoining {comp_id}")
+        else:
+            # Jugador sense paraules - no es pot verificar, bloquejar
+            logger.info(f"COMPETITION: Name '{request.nom_jugador}' taken (no words) in {comp_id}")
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "message": "El nom ja està en ús en aquesta competició",
+                    "nom_existent": True,
+                    "te_paraules": False
+                }
+            )
+        
         # Notificar altres jugadors (per refrescar l'estat)
         await broadcast_competition_update(comp_id)
     else:
@@ -899,10 +969,17 @@ async def join_competition(comp_id: str, request: JoinCompetitionRequest):
         
         # Calcular la millor posició dels intents existents
         millor_pos = None
+        paraules_inicials = []
         if request.intents_existents:
             posicions = [intent.get('posicio') for intent in request.intents_existents if 'posicio' in intent]
             if posicions:
                 millor_pos = min(posicions)
+            for intent in request.intents_existents:
+                paraules_inicials.append({
+                    "paraula": intent.get("forma_canonica") or intent.get("paraula", ""),
+                    "posicio": intent.get("posicio", 0),
+                    "es_pista": intent.get("es_pista", False)
+                })
         
         player_state = PlayerState(
             nom=request.nom_jugador,
@@ -910,7 +987,8 @@ async def join_competition(comp_id: str, request: JoinCompetitionRequest):
             pistes=0,
             estat_joc="jugant",
             millor_posicio=millor_pos,
-            ultima_actualitzacio=now
+            ultima_actualitzacio=now,
+            paraules=paraules_inicials
         )
         
         competition.jugadors[request.nom_jugador] = player_state
@@ -987,7 +1065,8 @@ async def competition_websocket(websocket: WebSocket, comp_id: str):
                     "intents": player.intents,
                     "pistes": player.pistes,
                     "estat_joc": player.estat_joc,
-                    "millor_posicio": player.millor_posicio
+                    "millor_posicio": player.millor_posicio,
+                    "paraules": player.paraules
                 }
                 for player in competition.jugadors.values()
             ]
