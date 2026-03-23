@@ -1,5 +1,6 @@
 
 from fastapi import FastAPI, HTTPException, Request, Query, WebSocket, WebSocketDisconnect
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Optional
@@ -930,9 +931,9 @@ async def join_competition(comp_id: str, request: JoinCompetitionRequest):
             # Jugador té paraules - requereix verificació
             if not request.paraula_verificacio:
                 logger.info(f"COMPETITION: Name '{request.nom_jugador}' already taken in {comp_id}, verification required")
-                raise HTTPException(
+                return JSONResponse(
                     status_code=409,
-                    detail={
+                    content={
                         "message": "El nom ja està en ús en aquesta competició",
                         "nom_existent": True,
                         "te_paraules": True
@@ -943,18 +944,18 @@ async def join_competition(comp_id: str, request: JoinCompetitionRequest):
             paraules_jugador = [Diccionari.normalitzar_paraula(p.get("paraula", "")) for p in existing_player.paraules]
             if paraula_verificacio_norm not in paraules_jugador:
                 logger.info(f"COMPETITION: Wrong verification for '{request.nom_jugador}' in {comp_id}")
-                raise HTTPException(
+                return JSONResponse(
                     status_code=403,
-                    detail="La paraula de verificació no és correcta"
+                    content={"message": "La paraula de verificació no és correcta"}
                 )
             # Verificació correcta - permetre reincorporació
             logger.info(f"COMPETITION: Player '{request.nom_jugador}' verified and rejoining {comp_id}")
         else:
             # Jugador sense paraules - no es pot verificar, bloquejar
             logger.info(f"COMPETITION: Name '{request.nom_jugador}' taken (no words) in {comp_id}")
-            raise HTTPException(
+            return JSONResponse(
                 status_code=409,
-                detail={
+                content={
                     "message": "El nom ja està en ús en aquesta competició",
                     "nom_existent": True,
                     "te_paraules": False
