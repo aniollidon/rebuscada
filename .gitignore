@@ -1,5 +1,35 @@
-node_modules
-build
+# Dependències
+node_modules/
+
+# Build
+build/
+
+# Lockfiles (frontal)
 package-lock.json
+
+# Dades locals (rànquings, diccionari, BD, cache)
 data/
+
+# Entorn
 .env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.ruff_cache/
+.pytest_cache/
+*.db
+*.db-wal
+*.db-shm
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
