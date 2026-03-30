@@ -4,11 +4,11 @@ Utilitza el model multilingual-e5-large per obtenir embeddings més precisos.
 Inclou sistema de cache per evitar recalcular embeddings cada vegada.
 """
 
-import os
 import json
-import numpy as np
-from typing import List, Dict
+import os
 from pathlib import Path
+
+import numpy as np
 from sentence_transformers import SentenceTransformer
 
 # Carpeta de dades relativa al fitxer actual
@@ -37,13 +37,13 @@ def carregar_model_sentence_transformer():
     return model
 
 
-def carregar_cache_embeddings() -> Dict[str, List[float]]:
+def carregar_cache_embeddings() -> dict[str, list[float]]:
     """Carrega el cache d'embeddings des del fitxer JSON."""
     if not EMBEDDINGS_CACHE_PATH.exists():
         return {}
     
     try:
-        with open(EMBEDDINGS_CACHE_PATH, 'r', encoding='utf-8') as f:
+        with open(EMBEDDINGS_CACHE_PATH, encoding='utf-8') as f:
             cache = json.load(f)
         print(f"[Cache] Carregats {len(cache)} embeddings des del cache.")
         return cache
@@ -52,7 +52,7 @@ def carregar_cache_embeddings() -> Dict[str, List[float]]:
         return {}
 
 
-def guardar_cache_embeddings(cache: Dict[str, List[float]]):
+def guardar_cache_embeddings(cache: dict[str, list[float]]):
     """Guarda el cache d'embeddings al fitxer JSON."""
     try:
         with open(EMBEDDINGS_CACHE_PATH, 'w', encoding='utf-8') as f:
@@ -62,7 +62,7 @@ def guardar_cache_embeddings(cache: Dict[str, List[float]]):
         print(f"[Cache] Error guardant cache: {e}")
 
 
-def obtenir_embedding(paraula: str, model, cache: Dict[str, List[float]]) -> np.ndarray:
+def obtenir_embedding(paraula: str, model, cache: dict[str, list[float]]) -> np.ndarray:
     """
     Obté l'embedding d'una paraula, utilitzant el cache si està disponible.
     
@@ -90,10 +90,10 @@ def calcular_similitud_cosinus(vec1, vec2):
 
 def calcular_ranking_complet(
     paraula_objectiu: str, 
-    diccionari: List[str], 
+    diccionari: list[str], 
     model,
     guardar_debug: bool = True
-) -> Dict[str, int]:
+) -> dict[str, int]:
     """
     Calcula el rànquing de totes les paraules del diccionari respecte a la paraula objectiu.
     Utilitza cache per evitar recalcular embeddings.

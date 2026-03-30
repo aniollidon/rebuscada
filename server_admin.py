@@ -1,20 +1,18 @@
-import os
-from fastapi import FastAPI, HTTPException, Request, Depends
 import json
-from fastapi.middleware.cors import CORSMiddleware
-from typing import Dict
-from pydantic import BaseModel
-import json
-from pathlib import Path
-from dotenv import load_dotenv
-import requests
-import re
-import json
-import re
-from fast_ai import fast_ai as run_fast_ai
-from datetime import datetime
 import logging
+import os
+import re
 import sys
+from datetime import datetime
+from pathlib import Path
+
+import requests
+from dotenv import load_dotenv
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+
+from fast_ai import fast_ai as run_fast_ai
 
 load_dotenv()
 
@@ -156,7 +154,7 @@ def _get_synonyms_for_word(word: str) -> list:
     synonym_groups = []
     
     try:
-        with open(SYNONYMS_PATH, 'r', encoding='utf-8') as f:
+        with open(SYNONYMS_PATH, encoding='utf-8') as f:
             for line_num, line in enumerate(f, 1):
                 line = line.strip()
                 if not line or line.startswith('#'):
@@ -399,7 +397,8 @@ def set_difficulty(filename: str, upd: DifficultyUpdate, _: None = Depends(requi
     _save_difficulties(diffs)
     return {"ok": True, "difficulty": upd.difficulty}
 
-from fastapi import Query
+from fastapi import Query  # noqa: E402
+
 
 @app.get("/api/rankings/{filename}")
 def read_ranking(filename: str, offset: int = Query(0, ge=0), limit: int = Query(100, ge=1), _: None = Depends(require_auth)):
@@ -423,7 +422,8 @@ def delete_ranking(filename: str, _: None = Depends(require_auth)):
     return {"ok": True}
 
 
-from fastapi import Request
+from fastapi import Request  # noqa: E402
+
 
 @app.post("/api/rankings/{filename}")
 async def save_ranking(filename: str, request: Request, _: None = Depends(require_auth)):
@@ -638,7 +638,7 @@ def generate_ranking(req: GenerateRequest, _: None = Depends(require_auth)):
     else:
         dicc = Diccionari.obtenir_diccionari()
         dicc.save(str(diccionari_json))
-    from proximitat import carregar_model_fasttext, calcular_ranking_complet
+    from proximitat import calcular_ranking_complet, carregar_model_fasttext
     model = carregar_model_fasttext()
     paraules = dicc.totes_les_lemes()
     ranking = calcular_ranking_complet(word, paraules, model)
@@ -1300,7 +1300,8 @@ def save_games(req: SaveGamesRequest, _: None = Depends(require_auth)):
 
 # ==================== ENDPOINTS D'ESTADÍSTIQUES ====================
 
-import stats as game_stats
+import stats as game_stats  # noqa: E402
+
 
 @app.get("/api/stats/overview")
 def stats_overview(_: None = Depends(require_auth)):
@@ -1377,16 +1378,16 @@ def stats_hints(_: None = Depends(require_auth)):
 # ==================== FI ENDPOINTS D'ESTADÍSTIQUES ====================
 
 if __name__ == "__main__":
-    import sys
     import argparse
+    import sys
     parser = argparse.ArgumentParser(description="Server admin Rebuscada")
     parser.add_argument("--frontend", action="store_true", help="Serveix també el frontend d'administració (carpeta /admin) a /admin")
     args = parser.parse_args()
     try:
         import uvicorn
         if args.frontend:
-            from fastapi.staticfiles import StaticFiles
             from fastapi.responses import RedirectResponse
+            from fastapi.staticfiles import StaticFiles
             admin_dir = Path(__file__).parent / "admin"
             data_dir = Path(__file__).parent / "data"
             if admin_dir.exists():

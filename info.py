@@ -1,6 +1,7 @@
 import argparse
 import json
 from pathlib import Path
+
 from diccionari import Diccionari
 
 # Ruta del diccionari serialitzat (compatible amb generate.py)

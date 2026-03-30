@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 """
 Actualitza fitxers de rànquing perquè s'alineïn amb el diccionari reduït actual.
@@ -22,20 +21,20 @@ Notes:
 """
 
 from __future__ import annotations
+
 import argparse
 import json
-from pathlib import Path
-from typing import Dict, Tuple, Set, Iterable
-
 
 # Poosa al path l'arrel del projecte
 import sys
+from collections.abc import Iterable
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 ROOT = Path(__file__).resolve().parent.parent
 
 
-def _load_exclusions_json() -> Tuple[Set[str], Set[str]]:
+def _load_exclusions_json() -> tuple[set[str], set[str]]:
     """Retorna (formes, lemes) a partir de data/exclusions.json si existeix.
     Format esperat: {"lemmas": [...], "formes": [...]};
     Compatibilitat: si és una llista, es considera llista de lemes.
@@ -47,8 +46,8 @@ def _load_exclusions_json() -> Tuple[Set[str], Set[str]]:
         data = json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return set(), set()
-    forms: Set[str] = set()
-    lemmas: Set[str] = set()
+    forms: set[str] = set()
+    lemmas: set[str] = set()
     if isinstance(data, dict):
         forml = data.get("formes") or []
         leml = data.get("lemmas") or []
@@ -61,7 +60,7 @@ def _load_exclusions_json() -> Tuple[Set[str], Set[str]]:
     return forms, lemmas
 
 
-def _save_exclusions_json(forms: Set[str], lemmas: Set[str]) -> None:
+def _save_exclusions_json(forms: set[str], lemmas: set[str]) -> None:
     """Desa exclusions a data/exclusions.json en format nou (objecte {lemmas, formes})."""
     path = ROOT / "data" / "exclusions.json"
     payload = {
@@ -111,11 +110,11 @@ def process_ranking_file(path: Path, dry_run: bool, auto_yes: bool) -> bool:
 
     # Lemas vàlids al diccionari reduït
     reduced = Diccionari.load(str(ROOT / "data" / "diccionari.json"))
-    valid_lemmas: Set[str] = set(reduced.canoniques.keys())
+    valid_lemmas: set[str] = set(reduced.canoniques.keys())
 
     # Exclusions: només el fitxer d'exclusions és la font de veritat
     exc_forms, exc_lemmas = _load_exclusions_json()
-    excluded_lemmas: Set[str] = set(exc_lemmas)
+    excluded_lemmas: set[str] = set(exc_lemmas)
 
     # Clau del rànquing = lema canònic
     invalid_keys = [k for k in data.keys() if k not in valid_lemmas]

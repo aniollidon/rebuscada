@@ -2,31 +2,31 @@ import argparse
 import json
 import os
 import sys
-from typing import List, Dict, Any, Tuple
+from typing import Any
 
 # Make repo root importable
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from scripts.extract_diec2_def import extract_diec2_definitions  # type: ignore
-from scripts.clean_txt import concepts_from_text, extract_keywords_rake  # type: ignore
+from diccionari import Diccionari
 from proximitatOpenAI import (
-    obtenir_client_openai,
+    calcular_similitud_cosinus,
     carregar_cache_embeddings,
+    guardar_cache_embeddings,
+    obtenir_client_openai,
     obtenir_embedding,
     obtenir_embeddings_batch,
-    calcular_similitud_cosinus,
-    guardar_cache_embeddings
 )
-from diccionari import Diccionari
+from scripts.clean_txt import concepts_from_text, extract_keywords_rake  # type: ignore
+from scripts.extract_diec2_def import extract_diec2_definitions  # type: ignore
 
 IGNORED_CATEGORY_TEXTS = {"lèxic comú", "lèxic general", "léxic general"}
 
 
 def top_n_from_text_full(text: str,
                          client,
-                         cache: Dict[str, List[float]],
-                         dicc_terms: List[str],
-                         n: int) -> List[str]:
+                         cache: dict[str, list[float]],
+                         dicc_terms: list[str],
+                         n: int) -> list[str]:
     """Compute top-N similar words using OpenAI embeddings of full text vs. dictionary words.
     Uses the complete definition text without filtering.
     """
@@ -38,7 +38,7 @@ def top_n_from_text_full(text: str,
     # Obtenir embeddings del diccionari en batch per eficiència
     embeddings_dict = obtenir_embeddings_batch(dicc_terms, client, cache)
     
-    sims: List[Tuple[str, float]] = []
+    sims: list[tuple[str, float]] = []
     for w in dicc_terms:
         if w in embeddings_dict:
             v_w = embeddings_dict[w]
@@ -47,11 +47,11 @@ def top_n_from_text_full(text: str,
     return [w for w, _ in sims[:n]]
 
 
-def top_n_from_text_terms(terms: List[str],
+def top_n_from_text_terms(terms: list[str],
                           client,
-                          cache: Dict[str, List[float]],
-                          dicc_terms: List[str],
-                          n: int) -> List[str]:
+                          cache: dict[str, list[float]],
+                          dicc_terms: list[str],
+                          n: int) -> list[str]:
     """Compute top-N similar words using OpenAI embeddings of joined terms vs. dictionary words.
     This mirrors generate_advanced's ranking intent for multi-term input.
     """
@@ -63,7 +63,7 @@ def top_n_from_text_terms(terms: List[str],
     # Obtenir embeddings del diccionari en batch per eficiència
     embeddings_dict = obtenir_embeddings_batch(dicc_terms, client, cache)
     
-    sims: List[Tuple[str, float]] = []
+    sims: list[tuple[str, float]] = []
     for w in dicc_terms:
         if w in embeddings_dict:
             v_w = embeddings_dict[w]
@@ -72,7 +72,7 @@ def top_n_from_text_terms(terms: List[str],
     return [w for w, _ in sims[:n]]
 
 
-def build_tests_for_definitions(entry: str, gen: int, client, cache: Dict[str, List[float]], dicc_terms: List[str], filter_mode: str = 'nofilter', include_categories: bool = False) -> Dict[str, Any]:
+def build_tests_for_definitions(entry: str, gen: int, client, cache: dict[str, list[float]], dicc_terms: list[str], filter_mode: str = 'nofilter', include_categories: bool = False) -> dict[str, Any]:
     """Build test lists for definitions.
     
     Args:
@@ -81,8 +81,8 @@ def build_tests_for_definitions(entry: str, gen: int, client, cache: Dict[str, L
     defs = extract_diec2_definitions(entry)
 
     # Build definitions array with tests
-    definitions: List[Dict[str, Any]] = []
-    category_texts_order: List[str] = []
+    definitions: list[dict[str, Any]] = []
+    category_texts_order: list[str] = []
     seen_cats = set()
 
     for d in defs:
@@ -122,12 +122,12 @@ def build_tests_for_definitions(entry: str, gen: int, client, cache: Dict[str, L
                     category_texts_order.append(cat)
 
     # Build category tests
-    result: Dict[str, Any] = {
+    result: dict[str, Any] = {
         'entry': entry,
         'definitions': definitions,
     }
     if include_categories:
-        categories: List[Dict[str, Any]] = []
+        categories: list[dict[str, Any]] = []
         for cat_text in category_texts_order:
             if filter_mode == 'nofilter':
                 cat_test = top_n_from_text_full(cat_text, client, cache, dicc_terms, gen)
@@ -222,5 +222,6 @@ def main():
             print(f"  [ERROR] Error processant '{word}': {e}")
 
 
-if __name__ == '__main__':    main()
+if __name__ == '__main__':
+    main()
 

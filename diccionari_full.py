@@ -1,12 +1,11 @@
+import json
 import os
 import re
-import json
 import sqlite3
 from collections import defaultdict
-from typing import Dict, Set, Tuple, Optional, List
 
 import requests
-from rapidfuzz import fuzz
+from rapidfuzz import fuzz  # type: ignore[import-not-found]
 
 
 class DiccionariFull:
@@ -109,7 +108,7 @@ class DiccionariFull:
     @classmethod
     def _processar_diccionari_text(
         cls, contingut: str
-    ) -> Tuple[Dict[str, Set[str]], Dict[str, Set[str]], Dict[str, Set[str]]]:
+    ) -> tuple[dict[str, set[str]], dict[str, set[str]], dict[str, set[str]]]:
         """
         Retorna:
           - forma_to_lemmas_set: flexió -> {lemes base}
@@ -117,9 +116,9 @@ class DiccionariFull:
           - lemma_categories_set: lema -> {cats2}
         No filtra per categoria; només retalla a 2 lletres i unifica lemes numerats.
         """
-        forma_to_lemmas_set: Dict[str, Set[str]] = defaultdict(set)
-        lemma_to_forms_set: Dict[str, Set[str]] = defaultdict(set)
-        lemma_categories_set: Dict[str, Set[str]] = defaultdict(set)
+        forma_to_lemmas_set: dict[str, set[str]] = defaultdict(set)
+        lemma_to_forms_set: dict[str, set[str]] = defaultdict(set)
+        lemma_categories_set: dict[str, set[str]] = defaultdict(set)
 
         for linia in contingut.splitlines():
             linia = linia.strip()
@@ -143,9 +142,9 @@ class DiccionariFull:
         return forma_to_lemmas_set, lemma_to_forms_set, lemma_categories_set
 
     @classmethod
-    def _obtenir_freq_lemes(cls) -> Dict[str, int]:
+    def _obtenir_freq_lemes(cls) -> dict[str, int]:
         txt = cls._descarregar(cls.FREQ_URL)
-        out: Dict[str, int] = {}
+        out: dict[str, int] = {}
         for linia in txt.splitlines():
             linia = linia.strip()
             if not linia:
@@ -170,9 +169,9 @@ class DiccionariFull:
             return cls(db_path)
 
         # 1) Descarrega i processa totes les fonts de diccionari
-        forma_to_lemmas_set: Dict[str, Set[str]] = defaultdict(set)
-        lemma_to_forms_set: Dict[str, Set[str]] = defaultdict(set)
-        lemma_categories_set: Dict[str, Set[str]] = defaultdict(set)
+        forma_to_lemmas_set: dict[str, set[str]] = defaultdict(set)
+        lemma_to_forms_set: dict[str, set[str]] = defaultdict(set)
+        lemma_categories_set: dict[str, set[str]] = defaultdict(set)
 
         for nom, url in cls.DICCIONARI_URLS:
             txt = cls._descarregar(url)
@@ -189,16 +188,16 @@ class DiccionariFull:
         lemma_freq = cls._obtenir_freq_lemes()
 
         # 3) Determina lema principal per forma (freq més alta; si empat, ordre alfabètic)
-        forma_primary: Dict[str, str] = {}
+        forma_primary: dict[str, str] = {}
         for forma, lemes in forma_to_lemmas_set.items():
             if not lemes:
                 continue
             best = None
             best_freq = -1
-            for l in lemes:
-                f = lemma_freq.get(l, 0)
-                if f > best_freq or (f == best_freq and (best is None or l < best)):
-                    best = l
+            for lema in lemes:
+                f = lemma_freq.get(lema, 0)
+                if f > best_freq or (f == best_freq and (best is None or lema < best)):
+                    best = lema
                     best_freq = f
             if best is None:
                 best = sorted(lemes)[0]
@@ -387,7 +386,7 @@ class DiccionariFull:
         candidates = []
         for row in rows:
             forma = row[0]
-            forma_simp = row[1]
+            row[1]
             freq = row[2]
             score = self._score_ortografic(q_norm, forma)
             if score < min_score:
@@ -442,16 +441,16 @@ class DiccionariFull:
 
         # Obté categories per lema
         lcats = {}
-        for l in lemes:
-            cursor.execute("SELECT category FROM lemma_categories WHERE lemma = ?", (l,))
-            lcats[l] = [row[0] for row in cursor.fetchall()]
+        for lema in lemes:
+            cursor.execute("SELECT category FROM lemma_categories WHERE lemma = ?", (lema,))
+            lcats[lema] = [row[0] for row in cursor.fetchall()]
         
         # Obté freqüències per lema
         lfreq = {}
-        for l in lemes:
-            cursor.execute("SELECT freq FROM lemmes WHERE lemma = ?", (l,))
+        for lema in lemes:
+            cursor.execute("SELECT freq FROM lemmes WHERE lemma = ?", (lema,))
             row = cursor.fetchone()
-            lfreq[l] = row[0] if row else 0
+            lfreq[lema] = row[0] if row else 0
 
         return {
             "word": w,
@@ -466,7 +465,7 @@ class DiccionariFull:
     def _cat2_label(self, cat2: str) -> str:
         return self.CAT2_LABELS.get(cat2, f"categoria '{cat2}'")
 
-    def reason_invalid_category(self, paraula: str) -> Optional[str]:
+    def reason_invalid_category(self, paraula: str) -> str | None:
         """Si la paraula existeix però cap dels seus lemes té categoria permesa, retorna missatge d'error."""
         w = self._normalitzar_paraula(paraula)
         cursor = self.conn.cursor()
@@ -483,17 +482,17 @@ class DiccionariFull:
             return None  # Desconeguda: que ho gestioni qui crida
         
         # Comprova si algun lema és permès
-        for l in lemes:
-            cursor.execute("SELECT category FROM lemma_categories WHERE lemma = ?", (l,))
+        for lema in lemes:
+            cursor.execute("SELECT category FROM lemma_categories WHERE lemma = ?", (lema,))
             cats = {row[0] for row in cursor.fetchall()}
             if any(c in self.ALLOWED_CAT2 for c in cats):
                 return None
         
         # No hi ha cap lema permès; construeix etiqueta predominant per feedback
         # Tria la categoria més freqüent entre els candidats per mostrar al missatge
-        counter: Dict[str, int] = defaultdict(int)
-        for l in lemes:
-            cursor.execute("SELECT category FROM lemma_categories WHERE lemma = ?", (l,))
+        counter: dict[str, int] = defaultdict(int)
+        for lema in lemes:
+            cursor.execute("SELECT category FROM lemma_categories WHERE lemma = ?", (lema,))
             for row in cursor.fetchall():
                 counter[row[0]] += 1
         
@@ -505,7 +504,7 @@ class DiccionariFull:
         # Sense categories (cas estrany)
         return "Disculpa, la paraula no és vàlida. Només es permeten noms i verbs comuns."
 
-    def reason_too_uncommon(self, paraula: str, freq_min: int) -> Optional[str]:
+    def reason_too_uncommon(self, paraula: str, freq_min: int) -> str | None:
         """
         Si la paraula existeix però tots els lemes candidats tenen freq < freq_min, retorna missatge.
         """
@@ -523,8 +522,8 @@ class DiccionariFull:
             return None
         
         best = 0
-        for l in lemes:
-            cursor.execute("SELECT freq FROM lemmes WHERE lemma = ?", (l,))
+        for lema in lemes:
+            cursor.execute("SELECT freq FROM lemmes WHERE lemma = ?", (lema,))
             row = cursor.fetchone()
             freq = row[0] if row else 0
             best = max(best, freq)
@@ -533,7 +532,7 @@ class DiccionariFull:
             return "Disculpa, la paraula no és vàlida, busca'n una de més comuna."
         return None
 
-    def explain_invalid(self, paraula: str, freq_min: int) -> Optional[str]:
+    def explain_invalid(self, paraula: str, freq_min: int) -> str | None:
         """
         Dona una explicació curta si la paraula no és acceptable pel joc, ordenant per prioritat:
         1) Categoria no permesa

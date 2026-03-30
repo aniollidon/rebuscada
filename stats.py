@@ -10,13 +10,13 @@ Guarda estadístiques de joc en una base de dades SQLite:
 - Paraules jugades per cada joc (per gràfics)
 """
 
-import sqlite3
-import os
 import logging
-from datetime import datetime, date
-from pathlib import Path
-from typing import Optional, Dict, List, Any
+import os
+import sqlite3
 from contextlib import contextmanager
+from datetime import date, datetime
+from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -121,7 +121,7 @@ def init_db():
 
 # ==================== FUNCIONS D'ENREGISTRAMENT ====================
 
-def record_visit(session_id: str, rebuscada: Optional[str] = None, game_id: Optional[int] = None):
+def record_visit(session_id: str, rebuscada: str | None = None, game_id: int | None = None):
     """Registra una visita (accés a la web). Deduplicat per session_id + dia."""
     now = datetime.now()
     today = now.strftime("%Y-%m-%d")
@@ -141,8 +141,8 @@ def record_visit(session_id: str, rebuscada: Optional[str] = None, game_id: Opti
 
 
 def record_guess(session_id: str, rebuscada: str, paraula: str,
-                 forma_canonica: Optional[str], posicio: int, es_correcta: bool,
-                 game_id: Optional[int] = None):
+                 forma_canonica: str | None, posicio: int, es_correcta: bool,
+                 game_id: int | None = None):
     """Registra un intent vàlid."""
     now = datetime.now()
     today = now.strftime("%Y-%m-%d")
@@ -178,7 +178,7 @@ def record_guess(session_id: str, rebuscada: str, paraula: str,
 
 
 def record_hint(session_id: str, rebuscada: str, paraula_pista: str, posicio: int,
-                game_id: Optional[int] = None):
+                game_id: int | None = None):
     """Registra una pista demanada."""
     now = datetime.now()
     today = now.strftime("%Y-%m-%d")
@@ -192,7 +192,7 @@ def record_hint(session_id: str, rebuscada: str, paraula_pista: str, posicio: in
         )
 
 
-def record_surrender(session_id: str, rebuscada: str, game_id: Optional[int] = None):
+def record_surrender(session_id: str, rebuscada: str, game_id: int | None = None):
     """Registra una rendició."""
     now = datetime.now()
     today = now.strftime("%Y-%m-%d")
@@ -208,7 +208,7 @@ def record_surrender(session_id: str, rebuscada: str, game_id: Optional[int] = N
 
 # ==================== FUNCIONS DE CONSULTA ====================
 
-def get_overview_stats() -> Dict[str, Any]:
+def get_overview_stats() -> dict[str, Any]:
     """Retorna estadístiques generals (resum)."""
     with get_db() as conn:
         today = date.today().strftime("%Y-%m-%d")
@@ -285,7 +285,7 @@ def get_overview_stats() -> Dict[str, Any]:
         }
 
 
-def get_daily_stats(days: int = 30) -> List[Dict[str, Any]]:
+def get_daily_stats(days: int = 30) -> list[dict[str, Any]]:
     """Retorna estadístiques diàries dels últims N dies."""
     with get_db() as conn:
         rows = conn.execute("""
@@ -328,7 +328,7 @@ def get_daily_stats(days: int = 30) -> List[Dict[str, Any]]:
         return [dict(row) for row in rows]
 
 
-def get_per_game_stats() -> List[Dict[str, Any]]:
+def get_per_game_stats() -> list[dict[str, Any]]:
     """Retorna estadístiques per joc (rebuscada)."""
     with get_db() as conn:
         rows = conn.execute("""
@@ -362,7 +362,7 @@ def get_per_game_stats() -> List[Dict[str, Any]]:
         return [dict(row) for row in rows]
 
 
-def get_words_played_for_game(rebuscada: str) -> List[Dict[str, Any]]:
+def get_words_played_for_game(rebuscada: str) -> list[dict[str, Any]]:
     """Retorna les paraules més jugades per una rebuscada específica (per gràfics)."""
     with get_db() as conn:
         rows = conn.execute("""
@@ -381,7 +381,7 @@ def get_words_played_for_game(rebuscada: str) -> List[Dict[str, Any]]:
         return [dict(row) for row in rows]
 
 
-def get_players_for_game(rebuscada: str) -> List[Dict[str, Any]]:
+def get_players_for_game(rebuscada: str) -> list[dict[str, Any]]:
     """Retorna la llista de jugadors (sessions) per una rebuscada, amb resum.
     Fusiona totes les sessions anònimes (anon-*) en un sol jugador."""
     with get_db() as conn:
@@ -425,7 +425,7 @@ def get_players_for_game(rebuscada: str) -> List[Dict[str, Any]]:
         return result
 
 
-def get_player_session(rebuscada: str, session_id: str) -> Dict[str, Any]:
+def get_player_session(rebuscada: str, session_id: str) -> dict[str, Any]:
     """Retorna la partida completa d'un jugador per una rebuscada.
     Si session_id és '__anon__', agrupa totes les sessions anon-*."""
     with get_db() as conn:
@@ -461,7 +461,7 @@ def get_player_session(rebuscada: str, session_id: str) -> Dict[str, Any]:
         }
 
 
-def get_completion_distribution(rebuscada: Optional[str] = None) -> List[Dict[str, Any]]:
+def get_completion_distribution(rebuscada: str | None = None) -> list[dict[str, Any]]:
     """Retorna la distribució d'intents per completar jocs (per gràfic de barres)."""
     with get_db() as conn:
         if rebuscada:
@@ -501,7 +501,7 @@ def get_completion_distribution(rebuscada: Optional[str] = None) -> List[Dict[st
         return [dict(row) for row in rows]
 
 
-def get_hint_stats_per_game() -> List[Dict[str, Any]]:
+def get_hint_stats_per_game() -> list[dict[str, Any]]:
     """Retorna estadístiques de pistes per joc."""
     with get_db() as conn:
         rows = conn.execute("""

@@ -1,17 +1,17 @@
 import argparse
 import json
 import os
-from typing import List
 
 # inclou directori parent al PATH
 import sys
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from proximitat import carregar_model_fasttext, calcular_similitud_cosinus
 from diccionari import Diccionari
+from proximitat import calcular_similitud_cosinus, carregar_model_fasttext
 
 
-def combinar_vectors(model, paraula: str, contexts: List[str], pes_context: float) -> List[float]:
+def combinar_vectors(model, paraula: str, contexts: list[str], pes_context: float) -> list[float]:
     """Combina el vector de la paraula amb els vectors de frase del context.
 
     - `pes_context` s'aplica a cada context; si hi ha múltiples, es fa mitjana.
@@ -38,8 +38,8 @@ def combinar_vectors(model, paraula: str, contexts: List[str], pes_context: floa
     return v_paraula + pes_context * v_context_promig
 
 
-def calcular_ranking_complet_amb_context(paraula_objectiu: str, diccionari: List[str], model,
-                                         contexts: List[str], pes_context: float):
+def calcular_ranking_complet_amb_context(paraula_objectiu: str, diccionari: list[str], model,
+                                         contexts: list[str], pes_context: float):
     """Calcula el rànquing complet de paraules respecte a la combinació paraula+context."""
     print(f"Calculant rànquing avançat per a: '{paraula_objectiu}' amb context...")
     v_obj = combinar_vectors(model, paraula_objectiu, contexts, pes_context)

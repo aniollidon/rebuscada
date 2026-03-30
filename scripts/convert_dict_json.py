@@ -1,9 +1,15 @@
 from __future__ import annotations
+
 import argparse
 import json
 import pickle
 from pathlib import Path
 from typing import Any
+
+try:
+    import numpy as np
+except ImportError:
+    np = None  # type: ignore[assignment]
 
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
@@ -19,12 +25,11 @@ Atenció: carregar fitxers pickle pot executar codi; només fes-ho si confies en
 """
 
 # Poosa al path l'arrel del projecte
-import sys
-from pathlib import Path
+import sys  # noqa: E402
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from diccionari_full import DiccionariFull  # noqa: F401 - mantingues-ho en l'espai global
-
+from diccionari_full import DiccionariFull  # noqa: E402, F401 - mantingues-ho en l'espai global
 
 
 def to_jsonable(obj: Any) -> Any:

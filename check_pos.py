@@ -1,6 +1,6 @@
 import json
 
-data = json.load(open('data/words/hora.json', 'r', encoding='utf-8'))
+data = json.load(open('data/words/hora.json', encoding='utf-8'))
 
 words = [
     'segon', 'període', 'calendari', 'interval', 'cita',

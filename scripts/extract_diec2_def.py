@@ -1,10 +1,10 @@
-import sys
-import re
 import html
-import requests
-from typing import Optional, List, Dict, Any
-from bs4 import BeautifulSoup
+import re
+import sys
+from typing import Any
 
+import requests
+from bs4 import BeautifulSoup
 
 BASE_URL = "https://dlc.iec.cat/Results"
 
@@ -119,7 +119,7 @@ def esborrar_accents(text: str) -> str:
         text = text.replace(acc, noacc)
     return text
 
-def get_definition_ids(term: str) -> List[str]:   
+def get_definition_ids(term: str) -> list[str]:   
     url = f"{BASE_URL}?DecEntradaText={requests.utils.quote(term)}"
     r = requests.get(url, timeout=15)
     if r.status_code != 200:
@@ -129,7 +129,7 @@ def get_definition_ids(term: str) -> List[str]:
     ids_double = re.findall(r"GetDefinition\(\s*\"([0-9]+)\"\s*\)", r.text)
     # Merge and deduplicate while preserving order
     seen = set()
-    result: List[str] = []
+    result: list[str] = []
     for x in ids_single + ids_double:
         if x not in seen:
             seen.add(x)
@@ -137,7 +137,7 @@ def get_definition_ids(term: str) -> List[str]:
     return result
 
 
-def fetch_definition_content(def_id: str) -> Optional[dict]:
+def fetch_definition_content(def_id: str) -> dict | None:
     # POST to /Results/Accepcio with form field id=<ID>
     r = requests.post(f"{BASE_URL}/Accepcio", data={"id": def_id}, timeout=15)
     if r.status_code != 200:
@@ -163,13 +163,12 @@ def html_to_text(fragment: str) -> str:
     return s
 
 
-def split_entries_with_tags(text: str) -> List[dict]:
+def split_entries_with_tags(text: str) -> list[dict]:
     # Detect bracket tags like [AGP] and split the text into entries tied to tags
     # Strategy: find all occurrences of [TAG] and capture text following until next [TAG] or end
-    entries: List[dict] = []
+    entries: list[dict] = []
     # Ensure consistent spacing around tags for splitting
     pattern = re.compile(r"\[([A-Z]{2,4})\]")
-    pos = 0
     matches = list(pattern.finditer(text))
     if not matches:
         # No tags: single entry, default category unknown; assign LC if present
@@ -195,7 +194,7 @@ def split_entries_with_tags(text: str) -> List[dict]:
     return entries
 
 
-def parse_entries_from_html(html_fragment: str) -> Dict[str, Any]:
+def parse_entries_from_html(html_fragment: str) -> dict[str, Any]:
     # Debug HTML disabled in production; enable if needed
     def strip_sense_prefix(t: str) -> str:
         t = t.strip()
@@ -231,8 +230,8 @@ def parse_entries_from_html(html_fragment: str) -> Dict[str, Any]:
     # Use BeautifulSoup for reliable HTML parsing and per-sense segmentation by <br>
     soup = BeautifulSoup(cleaned, 'html.parser')
     # Split into segments by top-level <br>
-    segments: List[List] = []
-    current: List = []
+    segments: list[list] = []
+    current: list = []
     for node in soup.contents:
         if getattr(node, 'name', None) == 'br':
             if current:
@@ -242,18 +241,18 @@ def parse_entries_from_html(html_fragment: str) -> Dict[str, Any]:
         current.append(node)
     if current:
         segments.append(current)
-    entries: List[dict] = []
+    entries: list[dict] = []
     for seg in segments:
         seg_soup = BeautifulSoup('', 'html.parser')
         for n in seg:
             seg_soup.append(n)
         # Gather tag codes and map to categories for this segment
-        seg_tags: List[str] = []
+        seg_tags: list[str] = []
         for tip in seg_soup.select('span.tip'):
             m = re.search(r"\[\s*([A-Z]{2,4})\s*\]", tip.get_text(" ", strip=True) or "")
             if m:
                 seg_tags.append(m.group(1))
-        seg_categories: List[str] = []
+        seg_categories: list[str] = []
         for code in seg_tags:
             cat = DIEC_TAG_MAP.get(code)
             if cat and cat not in seg_categories:
@@ -270,7 +269,7 @@ def parse_entries_from_html(html_fragment: str) -> Dict[str, Any]:
             tln.decompose()
         # Collect examples from italic spans
         italic_nodes = seg_soup.select('span.italic')
-        examples: List[str] = [n.get_text(' ', strip=True) for n in italic_nodes if n.get_text(' ', strip=True)]
+        examples: list[str] = [n.get_text(' ', strip=True) for n in italic_nodes if n.get_text(' ', strip=True)]
         # Numbers and morphology order:
         # 1st <b> -> NUM, 1st <i> -> SUBNUM, 2nd <b> -> concat to SUBNUM, 2nd <i> -> morphology
         num = None
@@ -339,7 +338,7 @@ def parse_entries_from_html(html_fragment: str) -> Dict[str, Any]:
     return {'mot': extracted_mot, 'entries': entries}
 
 
-def extract_diec2_definitions(term: str) -> List[dict]:
+def extract_diec2_definitions(term: str) -> list[dict]:
     term = term.lower().strip()
 
     # Esborra els accents de term
@@ -349,7 +348,7 @@ def extract_diec2_definitions(term: str) -> List[dict]:
 
     if not ids:
         return []
-    defs: List[dict] = []
+    defs: list[dict] = []
     seen_texts = set()
     for def_id in ids:
         payload = fetch_definition_content(def_id)
@@ -395,7 +394,7 @@ def main():
         sys.exit(2)
     if use_json:
         import json
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             'entry': term,
             'definitions': [
                 {

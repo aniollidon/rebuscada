@@ -7,6 +7,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from diccionari import Diccionari
 
+
 def main():
     parser = argparse.ArgumentParser(description='Ordena lemes per freqüència')
     parser.add_argument('-n', '--num', type=int, help='Nombre de lemes a mostrar')

@@ -4,13 +4,13 @@ Utilitza l'API d'OpenAI per obtenir embeddings d'alta qualitat.
 Inclou sistema de cache per evitar recalcular embeddings i estalviar costos d'API.
 """
 
-import os
 import json
-import numpy as np
-from typing import List, Dict
+import os
 from pathlib import Path
-from openai import OpenAI
+
+import numpy as np
 from dotenv import load_dotenv
+from openai import OpenAI
 
 # Carregar variables d'entorn del fitxer .env
 load_dotenv()
@@ -43,13 +43,13 @@ def obtenir_client_openai():
     return _CLIENT_CACHE
 
 
-def carregar_cache_embeddings() -> Dict[str, List[float]]:
+def carregar_cache_embeddings() -> dict[str, list[float]]:
     """Carrega el cache d'embeddings des del fitxer JSON."""
     if not EMBEDDINGS_CACHE_PATH.exists():
         return {}
     
     try:
-        with open(EMBEDDINGS_CACHE_PATH, 'r', encoding='utf-8') as f:
+        with open(EMBEDDINGS_CACHE_PATH, encoding='utf-8') as f:
             cache = json.load(f)
         print(f"[Cache OpenAI] Carregats {len(cache)} embeddings des del cache.")
         return cache
@@ -58,7 +58,7 @@ def carregar_cache_embeddings() -> Dict[str, List[float]]:
         return {}
 
 
-def guardar_cache_embeddings(cache: Dict[str, List[float]]):
+def guardar_cache_embeddings(cache: dict[str, list[float]]):
     """Guarda el cache d'embeddings al fitxer JSON."""
     try:
         BASE_DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -69,7 +69,7 @@ def guardar_cache_embeddings(cache: Dict[str, List[float]]):
         print(f"[Cache OpenAI] Error guardant cache: {e}")
 
 
-def obtenir_embedding(paraula: str, client, cache: Dict[str, List[float]]) -> np.ndarray:
+def obtenir_embedding(paraula: str, client, cache: dict[str, list[float]]) -> np.ndarray:
     """
     Obté l'embedding d'una paraula utilitzant OpenAI API, amb cache.
     """
@@ -93,7 +93,7 @@ def obtenir_embedding(paraula: str, client, cache: Dict[str, List[float]]) -> np
         raise
 
 
-def obtenir_embeddings_batch(paraules: List[str], client, cache: Dict[str, List[float]]) -> Dict[str, np.ndarray]:
+def obtenir_embeddings_batch(paraules: list[str], client, cache: dict[str, list[float]]) -> dict[str, np.ndarray]:
     """
     Obté els embeddings de múltiples paraules en batch per optimitzar les crides a l'API.
     """
@@ -166,9 +166,9 @@ def calcular_similitud_cosinus(vec1, vec2):
 
 def calcular_ranking_complet(
     paraula_objectiu: str, 
-    diccionari: List[str],
+    diccionari: list[str],
     guardar_debug: bool = True
-) -> Dict[str, int]:
+) -> dict[str, int]:
     """
     Calcula el rànquing de totes les paraules del diccionari respecte a la paraula objectiu.
     Utilitza l'API d'OpenAI amb cache per evitar crides duplicades.

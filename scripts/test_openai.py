@@ -5,13 +5,15 @@ Script de prova per validar que l'algorisme OpenAI funciona correctament.
 
 import os
 from pathlib import Path
+
 from dotenv import load_dotenv
 
 # Carregar variables d'entorn del fitxer .env
 load_dotenv()
 
 # Afegir el directori actual al path
-import sys
+import sys  # noqa: E402
+
 sys.path.insert(0, str(Path(__file__).parent))
 
 def test_openai_algorithm():

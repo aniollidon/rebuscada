@@ -18,3 +18,4 @@ numpy==1.26.4
 sentence-transformers>=2.2.0
 scikit-learn>=1.0.0
 pytest-asyncio>=1.0.0
+dotenv

@@ -1,11 +1,11 @@
+import json
+import os
+import shutil
+from pathlib import Path
+
 import fasttext
 import fasttext.util
-import os
-import json
-import shutil
 import numpy as np
-from typing import List, Dict, Optional
-from pathlib import Path
 
 # Carpeta de dades relativa al fitxer actual (no al cwd) per evitar problemes en entorns diferents
 BASE_DATA_DIR = Path(__file__).parent / "data"
@@ -60,12 +60,12 @@ def calcular_similitud_cosinus(vec1, vec2):
     """Calcula la similitud del cosinus entre dos vectors."""
     return np.dot(vec1, vec2) / (np.linalg.norm(vec1) * np.linalg.norm(vec2))
 
-def _carregar_openai_cache() -> Optional[Dict[str, List[float]]]:
+def _carregar_openai_cache() -> dict[str, list[float]] | None:
     """Carrega el cache d'embeddings OpenAI si existeix."""
     if not OPENAI_CACHE_PATH.exists():
         print("[filtre creuat] Cache OpenAI no trobat, el filtre creuat no es pot aplicar.")
         return None
-    with open(OPENAI_CACHE_PATH, 'r', encoding='utf-8') as f:
+    with open(OPENAI_CACHE_PATH, encoding='utf-8') as f:
         cache = json.load(f)
     print(f"[filtre creuat] Cache OpenAI carregat: {len(cache)} paraules.")
     return cache
@@ -157,7 +157,7 @@ def _filtrar_creuat_openai(similituds, openai_cache, paraula_objectiu,
         print(f"  OpenAI sim global - min={min(vals):.4f}  max={max(vals):.4f}  mitjana={np.mean(vals):.4f}  mediana={np.median(vals):.4f}")
 
         # Mostrar canvis al top-100
-        print(f"  Canvis al top-100 original:")
+        print("  Canvis al top-100 original:")
         pos_nova = {w: i for i, (w, _) in enumerate(resultat)}
         for pos_orig, (paraula, sim_orig) in enumerate(similituds[:100]):
             if paraula not in oai_sims:
@@ -174,10 +174,10 @@ def _filtrar_creuat_openai(similituds, openai_cache, paraula_objectiu,
     return resultat, penalitzades_info, referencia
 
 
-def calcular_ranking_complet(paraula_objectiu: str, diccionari: List[str], model, *,
+def calcular_ranking_complet(paraula_objectiu: str, diccionari: list[str], model, *,
                               filtre_coherencia: bool = False,
                               n_core: int = 15,
-                              factor_penalitzacio: float = 0.1) -> Dict[str, int]:
+                              factor_penalitzacio: float = 0.1) -> dict[str, int]:
     """Calcula el rànquing de totes les paraules del diccionari respecte a la paraula objectiu.
 
     Args:

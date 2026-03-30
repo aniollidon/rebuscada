@@ -1,8 +1,8 @@
-import sys
 import json
 import re
+import sys
 import xml.etree.ElementTree as ET
-from typing import List, Optional, Dict, Any
+from typing import Any
 
 # Minimal, streaming parser for Wikimedia pages-articles XML dumps (multistream works the same at the XML level).
 # Given a page title, it extracts Catalan (== Català ==) definitions (# lines) from the latest revision text.
@@ -23,7 +23,7 @@ DEFINITION_LINE_PATTERN = re.compile(r"^#(?![#:*])\s*(.+)")
 EXAMPLE_LINE_PATTERN = re.compile(r"^#[:*]\s*(.+)")
 
 
-def extract_catalan_section(wikitext: str) -> Optional[str]:
+def extract_catalan_section(wikitext: str) -> str | None:
     """Return only the Catalan 'Nom' and 'Verb' subsections text.
     - Find the Catalan language block: from '== {{-ca-}} ==' (or '== Català ==')
       until the next level-2 header '== ... =='.
@@ -35,13 +35,13 @@ def extract_catalan_section(wikitext: str) -> Optional[str]:
         return None
     start = match.end()
     # Find ALL level-2 headers and determine the next one after the Catalan header
-    headers = list(SECTION_HEADER_PATTERN.finditer(wikitext))
+    list(SECTION_HEADER_PATTERN.finditer(wikitext))
     # Locate the matched header among headers by position
     end = len(wikitext)
     ca_block = wikitext[start:end]
 
     # Identify all subsections within Catalan and concatenate only Nom/Verb/Adjectiu/Adverbi
-    parts: List[str] = []
+    parts: list[str] = []
     subs = list(SUBSECTION_HEADER_PATTERN.finditer(ca_block))
     if not subs:
         # If no subsections, nothing to keep
@@ -65,11 +65,11 @@ def extract_catalan_section(wikitext: str) -> Optional[str]:
     return "\n".join(parts)
 
 
-def iter_target_subsections(section_text: str, targets: List[str]) -> List[str]:
+def iter_target_subsections(section_text: str, targets: list[str]) -> list[str]:
     """Return the text slices for requested third-level subsections within a language section.
     Example targets: ['Nom', 'Verb']
     """
-    out_slices: List[str] = []
+    out_slices: list[str] = []
     # Find all subsection headers and their spans
     matches = list(SUBSECTION_HEADER_PATTERN.finditer(section_text))
     if not matches:
@@ -134,14 +134,14 @@ def trim_outer_quotes(text: str) -> str:
     return text.strip()
 
 
-def extract_definitions_from_section(section_text: str, with_examples: bool = False) -> List[Any]:
+def extract_definitions_from_section(section_text: str, with_examples: bool = False) -> list[Any]:
     """Extract definitions (and optionally examples) from the section.
     Returns:
         If with_examples=False: List[str]
         If with_examples=True: List[Dict[str, Any]] each {'def': str, 'examples': [str]}
     """
     if not with_examples:
-        definitions: List[str] = []
+        definitions: list[str] = []
         for line in section_text.splitlines():
             m = DEFINITION_LINE_PATTERN.match(line)
             if m:
@@ -160,8 +160,8 @@ def extract_definitions_from_section(section_text: str, with_examples: bool = Fa
                     definitions.append(trim_outer_quotes(cleaned))
         return definitions
     # With examples mode
-    out: List[Dict[str, Any]] = []
-    current: Optional[Dict[str, Any]] = None
+    out: list[dict[str, Any]] = []
+    current: dict[str, Any] | None = None
     for line in section_text.splitlines():
         def_m = DEFINITION_LINE_PATTERN.match(line)
         if def_m:
@@ -185,7 +185,7 @@ def extract_definitions_from_section(section_text: str, with_examples: bool = Fa
     return out
 
 
-def extract_defs_and_synonyms(section_text: str, with_examples: bool = False) -> Dict[str, Any]:
+def extract_defs_and_synonyms(section_text: str, with_examples: bool = False) -> dict[str, Any]:
     """Extract definitions and synonyms from a section slice.
     - Definitions: lines starting with a single '# ...' (same rule as before)
     - Examples: optional, tied to the last definition when with_examples=True
@@ -193,7 +193,7 @@ def extract_defs_and_synonyms(section_text: str, with_examples: bool = False) ->
       until the next template '{{...}}' that is not a bullet line or end of section.
     Returns a dict: {'definitions': [...]} or {'definitions': [{'def': str, 'examples': [...]}], 'synonyms': [...]}
     """
-    result: Dict[str, Any] = {"definitions": []}
+    result: dict[str, Any] = {"definitions": []}
     # Detect part of speech via Catalan templates
     if re.search(r"\{\{\s*ca-verb\s*\|", section_text):
         result["pos"] = "VERB"
@@ -207,7 +207,7 @@ def extract_defs_and_synonyms(section_text: str, with_examples: bool = False) ->
     defs = extract_definitions_from_section(section_text, with_examples=with_examples)
     result["definitions"] = defs
     # Then, synonyms
-    synonyms: List[str] = []
+    synonyms: list[str] = []
     lines = section_text.splitlines()
     i = 0
     in_syn = False
@@ -228,7 +228,7 @@ def extract_defs_and_synonyms(section_text: str, with_examples: bool = False) ->
                 # but better: extract wiki links
                 links = re.findall(r"\[\[(.*?)\]\]", text)
                 if links:
-                    synonyms.extend([clean_markup(l) for l in links])
+                    synonyms.extend([clean_markup(lnk) for lnk in links])
                 else:
                     cleaned = clean_markup(text)
                     if cleaned:
@@ -273,7 +273,7 @@ def iter_pages(xml_path: str):
             latest_text = None
 
 
-def extract_definitions_for_title(xml_path: str, entry_title: str, with_examples: bool = False) -> List[Any]:
+def extract_definitions_for_title(xml_path: str, entry_title: str, with_examples: bool = False) -> list[Any]:
     entry_title_norm = entry_title.strip()
     for title, text in iter_pages(xml_path):
         if title == entry_title_norm:

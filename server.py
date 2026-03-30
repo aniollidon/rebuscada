@@ -1,59 +1,62 @@
 
-from fastapi import FastAPI, HTTPException, Request, Query, WebSocket, WebSocketDisconnect
-from fastapi.responses import JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import List, Dict, Optional
-from functools import lru_cache
-import json
-import os
-import logging
-from dotenv import load_dotenv
-from pathlib import Path
-from diccionari import Diccionari
-from diccionari_full import DiccionariFull
-import uuid
 import asyncio
 import hashlib
+import json
+import logging
+import os
+import uuid
 from datetime import datetime
+from functools import lru_cache
+from pathlib import Path
+from typing import Optional
+
+from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+
 import stats as game_stats
+from diccionari import Diccionari
+from diccionari_full import DiccionariFull
+
 
 class GuessRequest(BaseModel):
     paraula: str
-    rebuscada: Optional[str] = None  # Paraula del dia opcional
-    comp_id: Optional[str] = None  # ID de competició opcional
-    nom_jugador: Optional[str] = None  # Nom del jugador en competició
-    es_personalitzada: Optional[bool] = False  # Si és True, no valida disponibilitat del joc
+    rebuscada: str | None = None  # Paraula del dia opcional
+    comp_id: str | None = None  # ID de competició opcional
+    nom_jugador: str | None = None  # Nom del jugador en competició
+    es_personalitzada: bool | None = False  # Si és True, no valida disponibilitat del joc
 
 class GuessResponse(BaseModel):
     paraula: str
-    forma_canonica: Optional[str]
+    forma_canonica: str | None
     posicio: int
     total_paraules: int
     es_correcta: bool
 
 class ExplicacioNoValida(BaseModel):
     raó: str
-    suggeriments: Optional[List[str]] = None
+    suggeriments: list[str] | None = None
 
 class PistaRequest(BaseModel):
-    intents: List[Dict]
-    rebuscada: Optional[str] = None  # Paraula del dia opcional
-    comp_id: Optional[str] = None  # ID de competició opcional
-    nom_jugador: Optional[str] = None  # Nom del jugador en competició
-    es_personalitzada: Optional[bool] = False  # Si és True, no valida disponibilitat del joc
+    intents: list[dict]
+    rebuscada: str | None = None  # Paraula del dia opcional
+    comp_id: str | None = None  # ID de competició opcional
+    nom_jugador: str | None = None  # Nom del jugador en competició
+    es_personalitzada: bool | None = False  # Si és True, no valida disponibilitat del joc
 
 class PistaResponse(BaseModel):
     paraula: str
-    forma_canonica: Optional[str]
+    forma_canonica: str | None
     posicio: int
     total_paraules: int
 
 class RendirseRequest(BaseModel):
-    rebuscada: Optional[str] = None  # Paraula del dia opcional
-    comp_id: Optional[str] = None  # ID de competició opcional
-    nom_jugador: Optional[str] = None  # Nom del jugador en competició
-    es_personalitzada: Optional[bool] = False  # Si és True, no valida disponibilitat del joc
+    rebuscada: str | None = None  # Paraula del dia opcional
+    comp_id: str | None = None  # ID de competició opcional
+    nom_jugador: str | None = None  # Nom del jugador en competició
+    es_personalitzada: bool | None = False  # Si és True, no valida disponibilitat del joc
 
 class RendirseResponse(BaseModel):
     paraula_correcta: str
@@ -66,7 +69,7 @@ class RankingListResponse(BaseModel):
     rebuscada: str
     total_paraules: int
     objectiu: str
-    ranking: List[RankingItem]
+    ranking: list[RankingItem]
 
 # Models per competicions
 class PlayerState(BaseModel):
@@ -74,39 +77,39 @@ class PlayerState(BaseModel):
     intents: int = 0
     pistes: int = 0
     estat_joc: str = "jugant"  # "jugant", "guanyat" o "rendit"
-    millor_posicio: Optional[int] = None  # Millor posició aconseguida
+    millor_posicio: int | None = None  # Millor posició aconseguida
     ultima_actualitzacio: str
-    paraules: List[Dict] = []  # Paraules provades: [{paraula, posicio, es_pista}]
+    paraules: list[dict] = []  # Paraules provades: [{paraula, posicio, es_pista}]
 
 class CompetitionState(BaseModel):
     comp_id: str
     rebuscada: str
     creador: str
-    jugadors: Dict[str, PlayerState]
+    jugadors: dict[str, PlayerState]
     data_creacio: str
     ultima_activitat: str
-    game_id: Optional[int] = None  # ID del joc associat (si existeix)
+    game_id: int | None = None  # ID del joc associat (si existeix)
 
 class CreateCompetitionRequest(BaseModel):
     nom_creador: str
-    rebuscada: Optional[str] = None
-    intents_existents: Optional[List[Dict]] = None
+    rebuscada: str | None = None
+    intents_existents: list[dict] | None = None
 
 class CreateCompetitionResponse(BaseModel):
     comp_id: str
     rebuscada: str
-    game_id: Optional[int] = None
+    game_id: int | None = None
 
 class JoinCompetitionRequest(BaseModel):
     nom_jugador: str
-    intents_existents: Optional[List[Dict]] = None
-    paraula_verificacio: Optional[str] = None  # Per verificar identitat si el nom ja existeix
+    intents_existents: list[dict] | None = None
+    paraula_verificacio: str | None = None  # Per verificar identitat si el nom ja existeix
 
 class JoinCompetitionResponse(BaseModel):
     comp_id: str
     rebuscada: str
     nom_jugador: str
-    game_id: Optional[int] = None
+    game_id: int | None = None
 
 # Configurar logging
 logging.basicConfig(
@@ -160,8 +163,8 @@ dicc = Diccionari.load(DICCIONARI_PATH)
 dicc_full = DiccionariFull(DICCIONARI_FULL_DB) if os.path.exists(DICCIONARI_FULL_DB) else None
 
 # Emmagatzematge en memòria per competicions
-competitions: Dict[str, CompetitionState] = {}
-competition_connections: Dict[str, List[WebSocket]] = {}
+competitions: dict[str, CompetitionState] = {}
+competition_connections: dict[str, list[WebSocket]] = {}
 
 def get_session_id(request: Request) -> str:
     """Obté el session_id del header X-Session-Id o en genera un estable basat en IP+UA."""
@@ -219,9 +222,9 @@ async def cleanup_expired_competitions():
 EXCLUSIONS_PATH = os.path.join("data", "exclusions.json")
 exclusions_set = set()
 if os.path.exists(EXCLUSIONS_PATH):
-    with open(EXCLUSIONS_PATH, "r", encoding="utf-8") as f:
+    with open(EXCLUSIONS_PATH, encoding="utf-8") as f:
         exclusions_data = json.load(f)
-        exclusions_set = set(Diccionari.normalitzar_paraula(l) for l in exclusions_data.get("lemmas", []))
+        exclusions_set = set(Diccionari.normalitzar_paraula(w) for w in exclusions_data.get("lemmas", []))
 
 # Cache per emmagatzemar fins a 10 rànquings carregats (evita recarregar constantment)
 CACHE_MAX_SIZE = int(os.getenv("RANKING_CACHE_SIZE", "10"))
@@ -265,7 +268,7 @@ def carregar_ranking(rebuscada: str):
         raise Exception(f"No s'ha trobat el fitxer de rànquing per la paraula '{rebuscada}'")
     
     try:
-        with open(fitxer_paraula, "r", encoding="utf-8") as f:
+        with open(fitxer_paraula, encoding="utf-8") as f:
             ranking_diccionari = json.load(f)
         
         # Si el rànquing està buit
@@ -316,7 +319,7 @@ def validar_joc_disponible(rebuscada: str):
         logger.warning(f"Error validant disponibilitat del joc '{rebuscada}': {str(e)}")
         # En cas d'error, permetre el joc
 
-def obtenir_game_id(rebuscada: str) -> Optional[int]:
+def obtenir_game_id(rebuscada: str) -> int | None:
     """Retorna l'ID del joc per una paraula rebuscada si existeix en games.json"""
     games_path = Path("data/games.json")
     if not games_path.exists():
@@ -331,7 +334,7 @@ def obtenir_game_id(rebuscada: str) -> Optional[int]:
         logger.warning(f"No s'ha pogut obtenir game_id per '{rebuscada}': {e}")
     return None
 
-def obtenir_ranking_actiu(rebuscada_request: Optional[str] = None, es_personalitzada: bool = False):
+def obtenir_ranking_actiu(rebuscada_request: str | None = None, es_personalitzada: bool = False):
     """Obté el rànquing actiu, sigui el global o el especificat"""
     rebuscada = rebuscada_request.lower() if rebuscada_request else DEFAULT_REBUSCADA
     
@@ -432,7 +435,7 @@ async def guess(request: GuessRequest, raw_request: Request):
             es_correcta_directe = paraula_introduida == paraula_objectiu
             logger.info(
                 f"GUESS: '{paraula_introduida}' (fora diccionari però trobat al rànquing) -> "
-                f"{'CORRECTA!' if es_correcta_directe else f'#'+str(rank_directe)} (objectiu: {paraula_objectiu})"
+                f"{'CORRECTA!' if es_correcta_directe else '#'+str(rank_directe)} (objectiu: {paraula_objectiu})"
             )
             # Registrar estadística
             try:
@@ -716,7 +719,7 @@ async def whynot(request: GuessRequest):
         else:
             # Obtenir categories del lema principal
             categories = info['lemma_categories'].get(primary_lemma, [])
-            cat_debug = ','.join(categories)
+            ','.join(categories)
             
             # Comprovar si és una categoria no permesa (no NC ni VM)
             te_nc_o_vm = any(cat in ['NC', 'VM'] for cat in categories)
@@ -762,9 +765,9 @@ async def actualitzar_progres_competicio(
     comp_id: str, 
     nom_jugador: str, 
     incrementar_pistes: bool = False,
-    posicio: Optional[int] = None,
-    estat_joc: Optional[str] = None,
-    paraula: Optional[str] = None,
+    posicio: int | None = None,
+    estat_joc: str | None = None,
+    paraula: str | None = None,
     es_pista: bool = False
 ):
     """Actualitza el progrés d'un jugador en una competició
@@ -1268,7 +1271,7 @@ async def rendirse(request: RendirseRequest, raw_request: Request):
         )
 
 @app.get("/ranking", response_model=RankingListResponse)
-async def obtenir_ranking(limit: int = Query(300, ge=1, le=2000), rebuscada: Optional[str] = None):
+async def obtenir_ranking(limit: int = Query(300, ge=1, le=2000), rebuscada: str | None = None):
     """Retorna les primeres 'limit' paraules del rànquing per la paraula del dia actual o l'especificada.
 
     Parameters

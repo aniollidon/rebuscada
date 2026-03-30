@@ -21,9 +21,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 
-from tests.conftest import MOCK_RANKING, MOCK_GAMES, MOCK_DATE
+from tests.conftest import MOCK_DATE, MOCK_GAMES, MOCK_RANKING
 
 
 @pytest.fixture

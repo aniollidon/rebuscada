@@ -1,28 +1,27 @@
 import argparse
-import sys
 import os
-from typing import List, Dict, Tuple
+import sys
 
 # Make repo root importable
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from diccionari import Diccionari
 from proximitatOpenAI import (
-    obtenir_client_openai,
+    calcular_similitud_cosinus,
     carregar_cache_embeddings,
+    guardar_cache_embeddings,
+    obtenir_client_openai,
     obtenir_embedding,
     obtenir_embeddings_batch,
-    calcular_similitud_cosinus,
-    guardar_cache_embeddings
 )
-from diccionari import Diccionari
 
 
 def trobar_paraules_categoria(categoria: str,
                                client,
-                               cache: Dict[str, List[float]],
-                               dicc_terms: List[str],
+                               cache: dict[str, list[float]],
+                               dicc_terms: list[str],
                                threshold: float = 0.5,
-                               n: int = 100) -> List[Tuple[str, float]]:
+                               n: int = 100) -> list[tuple[str, float]]:
     """Troba paraules similars a una categoria/concepte.
     
     Args:
@@ -42,7 +41,7 @@ def trobar_paraules_categoria(categoria: str,
     print(f"Comparant amb {len(dicc_terms)} paraules del diccionari...")
     embeddings_dict = obtenir_embeddings_batch(dicc_terms, client, cache)
     
-    resultats: List[Tuple[str, float]] = []
+    resultats: list[tuple[str, float]] = []
     for w in dicc_terms:
         if w in embeddings_dict:
             sim = calcular_similitud_cosinus(v_categoria, embeddings_dict[w])

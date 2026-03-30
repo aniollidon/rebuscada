@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 """
 Restaura tots els fitxers d'una carpeta 'bak' cap a la carpeta 'words'.
@@ -17,9 +16,10 @@ per al nom de destí i se sobreescriu.
 """
 
 from __future__ import annotations
-from pathlib import Path
+
 import argparse
 import shutil
+from pathlib import Path
 
 
 def restore_backups(src: Path, dst: Path) -> int:

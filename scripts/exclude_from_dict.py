@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 """
 Funcions:
@@ -10,24 +9,24 @@ Funcions:
 """
 
 from __future__ import annotations
+
 import argparse
 import json
 import os
 import re
-from collections import defaultdict
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Set, Tuple
-
 
 # Poosa al path l'arrel del projecte
 import sys
+from collections import defaultdict
+from collections.abc import Iterable
+from dataclasses import dataclass
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 ROOT = Path(__file__).resolve().parent.parent
 
 
-from diccionari_full import DiccionariFull  
+from diccionari_full import DiccionariFull  # noqa: E402
 
 EXCLUSIONS_URL = (
 	"https://raw.githubusercontent.com/Softcatala/catalan-dict-tools/refs/heads/master/"
@@ -41,23 +40,23 @@ DISALLOWED_CAT_PREFIX = {"D", "P", "R", "S", "C", "I"}
 
 @dataclass
 class Changes:
-	excluded_forms: Set[str]
-	excluded_lemmas: Set[str]
-	reasons_formes: Dict[str, Set[str]]  # forma -> {motiu, ...}
-	reasons_lemmas: Dict[str, Set[str]]  # lema  -> {motiu, ...}
+	excluded_forms: set[str]
+	excluded_lemmas: set[str]
+	reasons_formes: dict[str, set[str]]  # forma -> {motiu, ...}
+	reasons_lemmas: dict[str, set[str]]  # lema  -> {motiu, ...}
 
 
-def _load_exclusions_bimodal(url: Optional[str], local_file: Optional[Path]) -> Tuple[Set[str], Set[str]]:
+def _load_exclusions_bimodal(url: str | None, local_file: Path | None) -> tuple[set[str], set[str]]:
 	"""Carrega exclusions des d'URL i/o fitxer local, separant FORMES i LEMES.
 	El format accepta comentaris que canvien el mode:
-	  #EXCLOU FORMA ... -> les línies següents són FORMES
-	  #EXCLOU LEMA  ... -> les línies següents són LEMES
+		#EXCLOU FORMA ... -> les línies següents són FORMES
+		#EXCLOU LEMA  ... -> les línies següents són LEMES
 	Si no hi ha cap indicació, per defecte es consideren FORMES.
 	Retorna (formes, lemes).
 	"""
-	def parse_text(txt: str) -> Tuple[Set[str], Set[str]]:
-		fset: Set[str] = set()
-		lset: Set[str] = set()
+	def parse_text(txt: str) -> tuple[set[str], set[str]]:
+		fset: set[str] = set()
+		lset: set[str] = set()
 		mode = "forma"  # per defecte formes
 		for raw in txt.splitlines():
 			line = raw.strip()
@@ -77,8 +76,8 @@ def _load_exclusions_bimodal(url: Optional[str], local_file: Optional[Path]) -> 
 				fset.add(w)
 		return fset, lset
 
-	forms: Set[str] = set()
-	lemmas: Set[str] = set()
+	forms: set[str] = set()
+	lemmas: set[str] = set()
 	if url:
 		try:
 			import requests
@@ -120,15 +119,14 @@ def compute_exclusions(
 	apply_list: bool,
 	apply_nonalpha: bool,
 	apply_categories: bool,
-	exclusions_url: Optional[str],
-	exclusions_file: Optional[Path],
+	exclusions_url: str | None,
+	exclusions_file: Path | None,
 	allow_chars: str,
-	disallowed_prefixes: Optional[Set[str]] = None,
+	disallowed_prefixes: set[str] | None = None,
 ) -> Changes:
 	"""Calcula exclusions utilitzant com a base el pickle de DiccionariFull (data/diccionari_full.pkl).
 	D'aquí obtenim totes les formes i les categories.
 	"""
-	from diccionari_full import DiccionariFull
 
 	# Carrega el diccionari complet des de pickle (o el genera si cal)
 	full_path = ROOT / "data" / DiccionariFull.FULL_CACHE_FILE
@@ -143,10 +141,10 @@ def compute_exclusions(
 	formes_universe = list(full.forma_to_lemmas.keys())
 	lemmas_universe = set(full.lemma_to_forms.keys())
 
-	excluded_forms: Set[str] = set()
-	excluded_lemmas: Set[str] = set()
-	reasons_formes: Dict[str, Set[str]] = defaultdict(set)
-	reasons_lemmas: Dict[str, Set[str]] = defaultdict(set)
+	excluded_forms: set[str] = set()
+	excluded_lemmas: set[str] = set()
+	reasons_formes: dict[str, set[str]] = defaultdict(set)
+	reasons_lemmas: dict[str, set[str]] = defaultdict(set)
 
 	# 1) Llista d'exclusions oficial i/o local
 	if apply_list:
@@ -157,10 +155,10 @@ def compute_exclusions(
 				excluded_forms.add(w)
 				reasons_formes[w].add("llista-official-forma")
 		# LEMES
-		for l in list_lemmas:
-			if l in lemmas_universe:
-				excluded_lemmas.add(l)
-				reasons_lemmas[l].add("llista-official-lema")
+		for lema in list_lemmas:
+			if lema in lemmas_universe:
+				excluded_lemmas.add(lema)
+				reasons_lemmas[lema].add("llista-official-lema")
 
 	# 2) No alfabètiques
 	if apply_nonalpha:
@@ -173,9 +171,9 @@ def compute_exclusions(
 	if apply_categories:
 		try:
 			# Prefixos efectius: els passats per flag o els per defecte
-			effective_prefixes: Set[str] = set(disallowed_prefixes) if disallowed_prefixes else set(DISALLOWED_CAT_PREFIX)
+			effective_prefixes: set[str] = set(disallowed_prefixes) if disallowed_prefixes else set(DISALLOWED_CAT_PREFIX)
 			for lemma in lemmas_universe:
-				all_cats: Set[str] = set(full.lemma_categories.get(lemma, ()))
+				all_cats: set[str] = set(full.lemma_categories.get(lemma, ()))
 				if not all_cats:
 					continue
 				# Si alguna categoria comença amb algun prefix prohibit -> exclou LEMA
@@ -204,7 +202,7 @@ def save_exclusions_summary(path: Path, changes: Changes) -> None:
 	path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def main(argv: Optional[Iterable[str]] = None) -> int:
+def main(argv: Iterable[str] | None = None) -> int:
 	parser = argparse.ArgumentParser(description="Exclou paraules del diccionari i rànquings amb filtres independents")
 	# Selecció de filtres
 	parser.add_argument("--from-exclusions-list", action="store_true", help="Aplica la llista oficial d'exclusions (Softcatalà)")
@@ -231,7 +229,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
 
 	# Calcula exclusions segons flags
 	# Construeix el conjunt de prefixos des del flag (si s'ha especificat)
-	user_prefixes: Optional[Set[str]] = None
+	user_prefixes: set[str] | None = None
 	if args.disallow_categories:
 		tokens = [t.strip() for t in args.disallow_categories.split(",")]
 		user_prefixes = {t for t in tokens if t}
@@ -251,20 +249,20 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
 	reduced_path = ROOT / "data" / "diccionari.json"
 	try:
 		dicc_reduced = Diccionari.load(str(reduced_path))
-		reduced_forms: Set[str] = set(dicc_reduced.mapping_flexions_multi.keys()) | set(dicc_reduced.mapping_flexions.keys())
+		reduced_forms: set[str] = set(dicc_reduced.mapping_flexions_multi.keys()) | set(dicc_reduced.mapping_flexions.keys())
 	except Exception as e:
 		print(f"AVÍS: No s'ha pogut carregar el diccionari reduït ({reduced_path}): {e}")
 		reduced_forms = set()
 
 	# 1) Formes: filtra al diccionari reduït
-	filtered_excluded_forms: List[str] = sorted(w for w in changes.excluded_forms if w in reduced_forms)
+	filtered_excluded_forms: list[str] = sorted(w for w in changes.excluded_forms if w in reduced_forms)
 	# 2) Lemes: filtra a lemes del diccionari reduït
-	reduced_lemmas: Set[str] = set(dicc_reduced.canoniques.keys())
-	filtered_excluded_lemmas: List[str] = sorted(l for l in changes.excluded_lemmas if l in reduced_lemmas)
+	reduced_lemmas: set[str] = set(dicc_reduced.canoniques.keys())
+	filtered_excluded_lemmas: list[str] = sorted(lema for lema in changes.excluded_lemmas if lema in reduced_lemmas)
 
 	# 3) Motius: separem per formes i per lemes.
-	reasons_formes_filtered: Dict[str, Set[str]] = {f: changes.reasons_formes.get(f, set()) for f in filtered_excluded_forms}
-	reasons_lemmas_filtered: Dict[str, Set[str]] = {l: changes.reasons_lemmas.get(l, set()) for l in filtered_excluded_lemmas}
+	reasons_formes_filtered: dict[str, set[str]] = {f: changes.reasons_formes.get(f, set()) for f in filtered_excluded_forms}
+	reasons_lemmas_filtered: dict[str, set[str]] = {lema: changes.reasons_lemmas.get(lema, set()) for lema in filtered_excluded_lemmas}
 
 	# 4) Impressió
 	total_lemmas = len(filtered_excluded_lemmas)
@@ -292,7 +290,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
 	# Resum per motiu
 	# Resum per motiu, separat
 	if reasons_lemmas_filtered:
-		by_reason_lemmas: Dict[str, int] = defaultdict(int)
+		by_reason_lemmas: dict[str, int] = defaultdict(int)
 		for _w, rs in reasons_lemmas_filtered.items():
 			for r in rs:
 				by_reason_lemmas[r] += 1
@@ -300,7 +298,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
 		for r, n in sorted(by_reason_lemmas.items(), key=lambda kv: (-kv[1], kv[0])):
 			print(f"- {r}: {n}")
 	if reasons_formes_filtered:
-		by_reason_forms: Dict[str, int] = defaultdict(int)
+		by_reason_forms: dict[str, int] = defaultdict(int)
 		for _w, rs in reasons_formes_filtered.items():
 			for r in rs:
 				by_reason_forms[r] += 1

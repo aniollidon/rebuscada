@@ -16,8 +16,10 @@ import os
 import re
 import sys
 from pathlib import Path
+
 import requests
 from dotenv import load_dotenv
+
 from diccionari import Diccionari
 
 # Carrega variables d'entorn
@@ -168,7 +170,7 @@ def save_ai_file(word, words_list, output_dir):
             json.dump({"paraules": words_list}, f, ensure_ascii=False, indent=2)
         print(f"✓ Generat: {output_path} ({len(words_list)} paraules)")
         return True
-    except IOError as e:
+    except OSError as e:
         print(f"Error guardant {output_path}: {e}")
         return False
 

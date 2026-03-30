@@ -15,7 +15,6 @@ from unittest.mock import patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Dades de test
 # ---------------------------------------------------------------------------
@@ -204,7 +203,7 @@ def test_data_dir(tmp_path):
 @pytest.fixture
 def mock_env(test_data_dir):
     """Configura variables d'entorn per als tests."""
-    data_dir = str(test_data_dir / "data")
+    str(test_data_dir / "data")
     env_vars = {
         "DICCIONARI_PATH": str(test_data_dir / "data" / "diccionari.json"),
         "DEFAULT_REBUSCADA": "estrella",

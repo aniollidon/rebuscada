@@ -1,8 +1,7 @@
 import argparse
+import os
 import re
 import sys
-import os
-from typing import List, Optional
 from collections import Counter, defaultdict
 
 # Allow importing from repo root if needed
@@ -74,7 +73,7 @@ CAT_COMMON_VERBS = set(map(str.lower, [
 TOKEN_RE = re.compile(r"[\wÀ-ÖØ-öø-ÿ'·-]+", re.UNICODE)
 
 
-def tokenize(text: str) -> List[str]:
+def tokenize(text: str) -> list[str]:
     return TOKEN_RE.findall(text)
 
 
@@ -83,14 +82,14 @@ def is_stop(token: str) -> bool:
     return tl in CAT_STOPWORDS or tl in CAT_COMMON_VERBS
 
 
-def clean_with_spacy(text: str, keep_pos: Optional[set] = None, keep_case: bool = True) -> List[str]:
+def clean_with_spacy(text: str, keep_pos: set | None = None, keep_case: bool = True) -> list[str]:
     nlp = _maybe_load_spacy()
     if not nlp:
         return clean_fallback(text, keep_case=keep_case)
     if keep_pos is None:
         keep_pos = {"NOUN", "PROPN", "ADJ"}
     doc = nlp(text)
-    out: List[str] = []
+    out: list[str] = []
     for tok in doc:
         if tok.is_punct or tok.is_space:
             continue
@@ -105,9 +104,9 @@ def clean_with_spacy(text: str, keep_pos: Optional[set] = None, keep_case: bool 
     return out
 
 
-def clean_fallback(text: str, keep_case: bool = True) -> List[str]:
+def clean_fallback(text: str, keep_case: bool = True) -> list[str]:
     toks = tokenize(text)
-    out: List[str] = []
+    out: list[str] = []
     for t in toks:
         if t.isnumeric():
             continue
@@ -121,13 +120,13 @@ def clean_fallback(text: str, keep_case: bool = True) -> List[str]:
     return out
 
 
-def concepts_from_text(text: str, prefer_spacy: bool = True, keep_case: bool = True) -> List[str]:
+def concepts_from_text(text: str, prefer_spacy: bool = True, keep_case: bool = True) -> list[str]:
     if prefer_spacy and _maybe_load_spacy() is not None:
         return clean_with_spacy(text, keep_case=keep_case)
     return clean_fallback(text, keep_case=keep_case)
 
 
-def extract_keywords_rake(text: str, min_chars: int = 3) -> List[str]:
+def extract_keywords_rake(text: str, min_chars: int = 3) -> list[str]:
     """
     Implementation of RAKE (Rapid Automatic Keyword Extraction).
     Returns a list of unique words found in the top ranked phrases.
@@ -209,7 +208,7 @@ def main():
 
     if args.file:
         try:
-            with open(args.file, "r", encoding="utf-8") as f:
+            with open(args.file, encoding="utf-8") as f:
                 text = f.read().strip()
         except Exception as e:
             print(f"No s'ha pogut llegir el fitxer: {e}", file=sys.stderr)

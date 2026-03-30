@@ -1,9 +1,11 @@
 
 import argparse
 import json
-from proximitat import carregar_model_fasttext, calcular_ranking_complet
-from diccionari import Diccionari
+
 from dotenv import load_dotenv
+
+from diccionari import Diccionari
+from proximitat import calcular_ranking_complet, carregar_model_fasttext
 
 # Carregar variables d'entorn del fitxer .env
 load_dotenv()

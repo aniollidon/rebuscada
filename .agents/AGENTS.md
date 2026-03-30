@@ -33,6 +33,7 @@ El bon ús de la llengua catalana és una prioritat en el projecte. Tant com la 
 - Seguir la [guia d'estil de programari de Softcatalà](https://www.softcatala.org/guia-estil-programari/). Disponible com a skill [.agents/skills/catalan-style.md](.agents/skills/catalan-style.md) (versió resumida operacional) i [.agents/skills/catalan-style-referencia.md](.agents/skills/catalan-style-referencia.md) (referència completa amb exemples). Revisa els textos amb aquestes guies.
 - **Codi** (variables, funcions, classes): En **català** tal com és ara (p.ex. `obtenir_forma_canonica`, `carregar_ranking`).
 - **Comentaris al codi**: En català.
+- **MAI usarem el castellà**: Tota la comunicació és en català. cap LLM no escriurà en aquest projecte cap frase, paraula, nom de variable o documentació en castellà. Els anglisismes estan permets només dins la documentació tècnica.
 
 ## Comandes principals
 
@@ -144,3 +145,26 @@ Copiar `.env.example` a `.env` i ajustar. Variables principals:
 - **Frontend**: `cd frontend && npm test` — tests amb Jest + React Testing Library.
 - **CI**: GitHub Actions executa tots els tests en cada push/PR a `main`.
 - Abans de fer push, executar sempre: `pytest tests/ -v && cd frontend && npm test -- --watchAll=false`
+
+## Principis de qualitat de codi
+
+### Codi elegant és la prioritat
+
+**Mai fem "trampes" per satisfer linters o tests.** La qualitat del codi és més important que fer passar automàticament les eines.
+
+**Règles d'or:**
+
+1. **No suprimim errors legítims** amb `# noqa`, `# type: ignore`, o `# eslint-disable` a menys que:
+   - La supressió estigui **justificada amb un comentari explicatiu** (p.ex. `# type: ignore[import-not-found] - rapidfuzz no té type stubs`).
+   - L'error sigui **realment inexacte o unavoidable** (p.ex. imports opcionals, dependències externes sense type hints).
+   - Sigui la **solució més neta** en comparació amb alternatives.
+
+2. **Si vols satisfer un linter, primer busca la solució correcta:**
+   - PROHIBIT Afegir codi fals per evitar unused variable warnings.
+   - PROHIBIT Crear estructures artificials de dades.
+   - PROHIBIT Afegir try/catch innecessaris.
+
+3. **Evita sempre els Hacks**
+4. **Test coverage:** Els tests existeixen per assegurar qualitat, no per "passar tests". Si un test falla genuïnament, investiga el problema; no "arregleu el test" per que passi.
+
+Si el linter es queixa, comprova si és legítim. Si ho és, canvia el codi de veritat per complir amb l'error.

@@ -16,12 +16,12 @@ Cobreix els endpoints vitals:
 import json
 import os
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 
-from tests.conftest import MOCK_RANKING, MOCK_DICCIONARI_DATA, MOCK_GAMES, MOCK_DATE
+from tests.conftest import MOCK_DATE, MOCK_DICCIONARI_DATA, MOCK_GAMES, MOCK_RANKING
 
 
 @pytest.fixture
@@ -61,13 +61,12 @@ def server_app(test_data_dir, mock_env):
     server.carregar_ranking.cache_clear()
 
     # Patch les funcions que llegeixen del disc per usar dades de test
-    original_carregar = server.carregar_ranking.__wrapped__
 
     def mock_carregar_ranking(rebuscada: str):
         words_file = data_dir / "words" / f"{rebuscada}.json"
         if not words_file.exists():
             raise Exception(f"No s'ha trobat el fitxer de rànquing per la paraula '{rebuscada}'")
-        with open(words_file, "r", encoding="utf-8") as f:
+        with open(words_file, encoding="utf-8") as f:
             ranking = json.load(f)
         if not ranking:
             raise Exception(f"El fitxer de rànquing per la paraula '{rebuscada}' està buit.")

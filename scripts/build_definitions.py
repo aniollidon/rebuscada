@@ -1,17 +1,16 @@
+import argparse
+import glob
+import importlib.util
+import json
 import os
 import sys
-import json
-import glob
-import argparse
-import importlib.util
-from typing import List, Dict, Any
-
+from typing import Any
 
 # Normal import of the extractor module (sibling in the same folder)
 import extract_wiktionary_def as extractor_mod
 
 
-def discover_lemmas_from_diccionari(diccionari_path: str) -> List[str]:
+def discover_lemmas_from_diccionari(diccionari_path: str) -> list[str]:
     """Load lemmas from data/diccionari.json using Diccionari.load."""
     repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
     dic_module_path = os.path.join(repo_root, 'diccionari.py')
@@ -26,8 +25,8 @@ def discover_lemmas_from_diccionari(diccionari_path: str) -> List[str]:
     return sorted(dic.canoniques.keys())
 
 
-def read_lemmas_file(path: str) -> List[str]:
-    with open(path, 'r', encoding='utf-8') as f:
+def read_lemmas_file(path: str) -> list[str]:
+    with open(path, encoding='utf-8') as f:
         data = f.read()
     try:
         j = json.loads(data)
@@ -41,7 +40,7 @@ def read_lemmas_file(path: str) -> List[str]:
     return [line.strip() for line in data.splitlines() if line.strip()]
 
 
-def write_definitions(output_dir: str, lemma: str, sections: List[Dict[str, Any]]) -> str:
+def write_definitions(output_dir: str, lemma: str, sections: list[dict[str, Any]]) -> str:
     os.makedirs(output_dir, exist_ok=True)
     out_path = os.path.join(output_dir, f"{lemma}.definicions.json")
     payload = {
@@ -53,12 +52,12 @@ def write_definitions(output_dir: str, lemma: str, sections: List[Dict[str, Any]
     return out_path
 
 
-def build_list_definitions(wiktionary_dump_path: str, word_list: List[str]) -> Dict[str, Any]:
+def build_list_definitions(wiktionary_dump_path: str, word_list: list[str]) -> dict[str, Any]:
     """Return a mapping lemma -> sections by streaming the dump once.
     Uses extractor_mod.iter_pages(wiktionary_dump_path) and processes only titles in word_list.
     """
     wanted = set(word_list)
-    out: Dict[str, Any] = {lemma: [] for lemma in wanted}
+    out: dict[str, Any] = {lemma: [] for lemma in wanted}
     for title, text in extractor_mod.iter_pages(wiktionary_dump_path):
         if title in wanted:
             print (f"Extracting definitions for: {title}")
@@ -89,7 +88,7 @@ def main():
 
     print(f"Processing {len(lemmas)} lemmas...")
     processed = 0
-    failed: List[str] = []
+    failed: list[str] = []
     # Build the mapping using the helper
     try:
         defs_map = build_list_definitions(args.dump, lemmas)
@@ -98,8 +97,8 @@ def main():
         sys.exit(1)
 
     # Consolidate into a single JSON: only include lemmas with non-empty sections
-    consolidated: Dict[str, Any] = {}
-    notfound: List[str] = []
+    consolidated: dict[str, Any] = {}
+    notfound: list[str] = []
     for lemma in lemmas:
         try:
             sections_raw = defs_map.get(lemma, [])
@@ -107,7 +106,7 @@ def main():
                 notfound.append(lemma)
                 continue
             # Normalize for JSON: ensure consistent shape
-            sections: List[Dict[str, Any]] = []
+            sections: list[dict[str, Any]] = []
             for sec in sections_raw:
                 pos = sec.get('pos')
                 syns = sec.get('synonyms', [])

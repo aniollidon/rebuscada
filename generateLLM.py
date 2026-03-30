@@ -16,13 +16,12 @@ import os
 import re
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
 
 from dotenv import load_dotenv
 from openai import OpenAI
 
 from diccionari import Diccionari
-from proximitat import carregar_model_fasttext, calcular_ranking_complet
+from proximitat import calcular_ranking_complet, carregar_model_fasttext
 
 load_dotenv()
 
@@ -91,7 +90,7 @@ Respon NOMÉS amb la llista de paraules separades per comes."""
 
 def generar_paraules_llm(
     client: OpenAI, paraula: str, model: str = DEFAULT_MODEL
-) -> List[str]:
+) -> list[str]:
     """Demana a l'LLM que generi paraules semànticament relacionades."""
     print(f"[LLM] Generant paraules relacionades amb '{paraula}'...")
 
@@ -122,8 +121,8 @@ def generar_paraules_llm(
 
 
 def creuar_amb_diccionari(
-    paraules_llm: List[str], diccionari: Diccionari, lemes_diccionari: Set[str]
-) -> Tuple[Set[str], List[str]]:
+    paraules_llm: list[str], diccionari: Diccionari, lemes_diccionari: set[str]
+) -> tuple[set[str], list[str]]:
     """Creua les paraules del LLM amb el diccionari, resolent flexions a lemes.
 
     Retorna:
@@ -180,9 +179,9 @@ paraula:puntuació"""
 def puntuar_lot(
     client: OpenAI,
     paraula_objectiu: str,
-    lot: List[str],
+    lot: list[str],
     model: str = DEFAULT_MODEL,
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """Puntua un lot de paraules amb el LLM.
 
     Retorna dict paraula -> puntuació (0-10).
@@ -207,7 +206,7 @@ def puntuar_lot(
     )
 
     text = response.choices[0].message.content.strip()
-    puntuacions: Dict[str, float] = {}
+    puntuacions: dict[str, float] = {}
 
     for linia in text.split("\n"):
         linia = linia.strip()
@@ -230,12 +229,12 @@ def puntuar_lot(
 def puntuar_paraules(
     client: OpenAI,
     paraula_objectiu: str,
-    paraules: List[str],
+    paraules: list[str],
     model: str = DEFAULT_MODEL,
     mida_lot: int = MIDA_LOT,
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """Puntua una llista de paraules en lots."""
-    totes_puntuacions: Dict[str, float] = {}
+    totes_puntuacions: dict[str, float] = {}
     total_lots = (len(paraules) + mida_lot - 1) // mida_lot
 
     for i in range(0, len(paraules), mida_lot):
@@ -264,12 +263,12 @@ def puntuar_paraules(
 
 
 def combinar_rankings(
-    ranking_fasttext: Dict[str, int],
-    puntuacions_llm: Dict[str, float],
+    ranking_fasttext: dict[str, int],
+    puntuacions_llm: dict[str, float],
     top_avaluat: int = TOP_A_AVALUAR,
     pes_llm: float = PES_LLM,
     pes_ft: float = PES_FASTTEXT,
-) -> Dict[str, int]:
+) -> dict[str, int]:
     """Combina el rànking de FastText amb les puntuacions del LLM.
 
     Per a les paraules avaluades pel LLM:
@@ -277,7 +276,7 @@ def combinar_rankings(
 
     Per a la resta: mantenim l'ordre de FastText.
     """
-    total_paraules = len(ranking_fasttext)
+    len(ranking_fasttext)
 
     # Trobar la paraula objectiu (posició 0 a FastText)
     paraula_objectiu = None
@@ -303,7 +302,7 @@ def combinar_rankings(
     paraules_avaluades = set(ft_scores.keys()) | set(llm_scores.keys())
 
     # Calcular puntuació combinada
-    puntuacions_combinades: Dict[str, float] = {}
+    puntuacions_combinades: dict[str, float] = {}
     for paraula in paraules_avaluades:
         score_llm = llm_scores.get(paraula, 0.0)
         score_ft = ft_scores.get(paraula, 0.0)
@@ -315,7 +314,7 @@ def combinar_rankings(
     )
 
     # Construir rànking final
-    ranking_final: Dict[str, int] = {}
+    ranking_final: dict[str, int] = {}
 
     # 0. La paraula objectiu sempre va a la posició 0
     if paraula_objectiu:
@@ -348,11 +347,11 @@ def combinar_rankings(
 # =============================================================================
 
 
-def carregar_cache_llm(paraula: str) -> Optional[dict]:
+def carregar_cache_llm(paraula: str) -> dict | None:
     """Carrega resultats LLM cachejats per una paraula."""
     cache_path = LLM_CACHE_DIR / f"{paraula}.json"
     if cache_path.exists():
-        with open(cache_path, "r", encoding="utf-8") as f:
+        with open(cache_path, encoding="utf-8") as f:
             return json.load(f)
     return None
 
@@ -382,7 +381,7 @@ def pipeline_llm(
     pes_ft: float = PES_FASTTEXT,
     usar_cache: bool = True,
     filtre_creuat: bool = False,
-) -> Dict[str, int]:
+) -> dict[str, int]:
     """Pipeline complet: FastText + generació LLM + puntuació LLM → rànking final."""
 
     lemes = diccionari.totes_les_lemes(freq_min=20)
@@ -428,7 +427,7 @@ def pipeline_llm(
 
         # --- Pas 2: Creuar amb diccionari ---
         print(f"\n{'='*60}")
-        print(f"Pas 2: Creuant amb diccionari")
+        print("Pas 2: Creuant amb diccionari")
         print(f"{'='*60}")
         lemes_llm, no_trobades = creuar_amb_diccionari(
             paraules_generades_llm, diccionari, lemes_set
@@ -446,7 +445,7 @@ def pipeline_llm(
                 injectades.append((lema, pos_ft))
         if injectades:
             injectades.sort(key=lambda x: x[1])
-            print(f"\nParaules LLM que FastText tenia lluny (injectades al top):")
+            print("\nParaules LLM que FastText tenia lluny (injectades al top):")
             for lema, pos in injectades[:30]:
                 print(f"  {lema}: posició FT {pos}")
 
@@ -491,8 +490,8 @@ def pipeline_llm(
 
 
 def comparar_rankings(
-    ranking_ft: Dict[str, int],
-    ranking_final: Dict[str, int],
+    ranking_ft: dict[str, int],
+    ranking_final: dict[str, int],
     paraula_objectiu: str,
     top_n: int = 100,
 ):
