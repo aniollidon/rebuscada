@@ -359,7 +359,7 @@ async def internal_cache_clear(request: Request):
         logger.warning("/internal/cache/clear rebut però ADMIN_SHARED_SECRET no està configurat")
         raise HTTPException(status_code=503, detail="Configuració d'administració no disponible")
     if not token or token != ADMIN_SHARED_SECRET:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+        raise HTTPException(status_code=401, detail="No autoritzat")
 
     caches_info = []
     total_before = 0
@@ -698,7 +698,7 @@ async def whynot(request: GuessRequest):
     # Obtenir informació de la paraula del diccionari complet
     info = dicc_full.info(paraula_introduida)
 
-    explicacio = "Aquesta paraula simplement no és vàlida."
+    explicacio = "Aquesta paraula no és vàlida."
     suggeriments = None
     
     # 1. Si la paraula no existeix al diccionari complet -> error tipogràfic
@@ -715,7 +715,7 @@ async def whynot(request: GuessRequest):
         primary_lemma = info['primary_lemma'] or (lemes[0] if lemes else None)
         
         if not primary_lemma:
-            explicacio = "Aquesta paraula no és vàlida per una inconsistència al diccionari (#NOLEMA-ERROR). Si creus que hi hauria d'estar, si us plau, informa'ns."
+            explicacio = "Aquesta paraula no és vàlida per una inconsistència al diccionari (#NOLEMA-ERROR). Si creieu que hi hauria d'estar, informeu-nos."
         else:
             # Obtenir categories del lema principal
             categories = info['lemma_categories'].get(primary_lemma, [])
@@ -1267,7 +1267,7 @@ async def rendirse(request: RendirseRequest, raw_request: Request):
         logger.error(f"RENDICIÓ: Error - {str(e)}")
         raise HTTPException(
             status_code=500,
-            detail=f"Hi ha un error en abandonar: {str(e)}"
+            detail=f"S'ha produït un error en abandonar: {str(e)}"
         )
 
 @app.get("/ranking", response_model=RankingListResponse)

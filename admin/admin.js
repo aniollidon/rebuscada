@@ -25,7 +25,7 @@ let adminToken = null; // guardem la contrasenya (x-admin-token)
 async function ensureAuthenticated() {
   if (adminToken) return true;
   const pwd = prompt(
-    "Contrasenya admin (abans recorda recarregar la pàgina per tenir els últims canvis ctrl+R):",
+    "Contrasenya d'administració (abans, recordeu recarregar la pàgina amb Ctrl+R per tenir els últims canvis):",
     "",
   );
   if (pwd === null) return false;
@@ -35,7 +35,7 @@ async function ensureAuthenticated() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ password: pwd }),
     });
-    if (!res.ok) throw new Error("Auth failed");
+    if (!res.ok) throw new Error("Autenticació fallida");
     const data = await res.json();
     if (data.ok) {
       adminToken = pwd; // s'utilitza com a token simple
@@ -161,21 +161,21 @@ function getValidationState(filename) {
       checked: true,
       indeterminate: false,
       className: "validated-approved",
-      title: "Aprovat per l'Aniol - Fes clic per tornar a no validat",
+      title: "Aprovat per l'Aniol - Feu clic per tornar a no validat",
     };
   } else if (status === "validated") {
     return {
       checked: true,
       indeterminate: false,
       className: "validated-yes",
-      title: "Validat - Fes clic per aprovar",
+      title: "Validat - Feu clic per aprovar",
     };
   } else {
     return {
       checked: false,
       indeterminate: false,
       className: "",
-      title: "No validat - Fes clic per validar",
+      title: "No validat - Feu clic per validar",
     };
   }
 }
@@ -236,8 +236,8 @@ function renderApp() {
 
               <ul class="file-list" id="file-list"></ul>
               <div class="d-grid mt-3 gap-2">
-                <button class="btn btn-primary btn-sm" id="create-file" type="button">Crear rànquing…</button>
-                <button class="btn btn-outline-primary btn-sm" id="create-random" type="button" title="Genera 10 paraules aleatòries (pot trigar)">Generar 10 aleatòries…</button>
+                <button class="btn btn-primary btn-sm" id="create-file" type="button">Crea un rànquing…</button>
+                <button class="btn btn-outline-primary btn-sm" id="create-random" type="button" title="Genera 10 paraules aleatòries (pot trigar)">Genera 10 aleatòries…</button>
                 <small id="random-status" class="text-muted" style="display:none;">Generant... pot trigar uns segons.</small>
               </div>
             </div>
@@ -306,7 +306,7 @@ function renderApp() {
                 <small id="clearCacheStatus" class="text-muted" style="display:none;">Netejant…</small>
               </div>
               <div class="form-text mt-1">
-                Buida les entrades cachejades dels rànquings carregats (LRU). Fes-ho si has modificat els ranquings <code>*.json</code>. No afecta partides en curs; simplement obliga a reobrir els fitxers quan es demanin de nou.
+                Buida les entrades de memòria cau dels rànquings carregats (LRU). Feu-ho si heu modificat els rànquings <code>*.json</code>. No afecta partides en curs; obliga a reobrir els fitxers quan es demanin de nou.
               </div>
             </div>
             <div class="modal-footer">
@@ -533,7 +533,7 @@ function openSettingsModal() {
     clearBtn.onclick = async () => {
       const ok = await ensureAuthenticated();
       if (!ok) return;
-      if (!confirm("Segur que vols netejar la memòria cau del servidor?"))
+      if (!confirm("Segur que voleu netejar la memòria cau del servidor?"))
         return;
       try {
         clearBtn.disabled = true;
@@ -783,7 +783,7 @@ function renderCalendarList() {
       const idx = parseInt(e.currentTarget.dataset.calIdx);
       if (
         confirm(
-          `Segur que vols eliminar la paraula ${calendarGames[idx].name}?`,
+          `Segur que voleu eliminar la paraula ${calendarGames[idx].name}?`,
         )
       ) {
         calendarGames.splice(idx, 1);
@@ -1008,8 +1008,8 @@ function openCustomTextTestModal() {
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tanca"></button>
           </div>
           <div class="modal-body">
-            <p class="text-muted small">Enganxa text (es netejaran automàticament els caràcters no vàlids). Fes una línia per cada paraula.</p>
-            <p class="text-muted small"> Pots utilitzar aquest prompt: "llista 500 paraules úniques relacionades semànticament amb la paraula <b>PARAULA</b>. (només paraules simples singulars). Mostra el resultat en un bloc de codi."</p>
+            <p class="text-muted small">Enganxa text (es netejaran automàticament els caràcters no vàlids). Feu una línia per cada paraula.</p>
+            <p class="text-muted small"> Podeu utilitzar aquest prompt: "llista 500 paraules úniques relacionades semànticament amb la paraula <b>PARAULA</b>. (només paraules simples singulars). Mostra el resultat en un bloc de codi."</p>
             <textarea class="form-control" id="custom-text-textarea" rows="15" placeholder="Enganxa aquí el text d'internet..."></textarea>
             <div class="mt-2">
               <small class="text-muted">Paraules: <span id="word-count">0</span></small>
@@ -1245,8 +1245,8 @@ function openIAShortcutWithPrompt(preparedPrompt) {
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tanca"></button>
           </div>
           <div class="modal-body">
-            <p class="text-muted small">Enganxa text (es netejaran automàticament els caràcters no vàlids). Fes una línia per cada paraula.</p>
-            <p class="text-muted small"> Pots utilitzar aquest prompt: "llista 500 paraules úniques relacionades semànticament amb la paraula <b>PARAULA</b>. (només paraules simples singulars). Mostra el resultat en un bloc de codi."</p>
+            <p class="text-muted small">Enganxa text (es netejaran automàticament els caràcters no vàlids). Feu una línia per cada paraula.</p>
+            <p class="text-muted small"> Podeu utilitzar aquest prompt: "llista 500 paraules úniques relacionades semànticament amb la paraula <b>PARAULA</b>. (només paraules simples singulars). Mostra el resultat en un bloc de codi."</p>
             <textarea class="form-control" id="custom-text-textarea" rows="15" placeholder="Enganxa aquí el text d'internet..."></textarea>
             <div class="mt-2">
               <small class="text-muted">Paraules: <span id="word-count">0</span></small>
@@ -1498,7 +1498,7 @@ function openAiSearchModalWithPrompt(targetTextarea, preparedPrompt) {
             </select>
             <label class="form-label">Prompt</label>
             <textarea class="form-control" id="ai-prompt-input" rows="6">${preparedPrompt}</textarea>
-            <div class="form-text">Pots editar el prompt abans d'enviar.</div>
+            <div class="form-text">Podeu editar el prompt abans d'enviar.</div>
             <div id="ai-error" class="text-danger mt-2" style="display:none;"></div>
           </div>
           <div class="modal-footer">
@@ -2858,7 +2858,7 @@ function openCommentModal(type, word = null) {
   const deleteBtn = document.getElementById("delete-comment-btn");
   if (deleteBtn) {
     deleteBtn.onclick = async () => {
-      if (!confirm("Segur que vols esborrar aquest comentari?")) return;
+      if (!confirm("Segur que voleu esborrar aquest comentari?")) return;
       await deleteComment(isGlobal, word);
       modal.hide();
     };
@@ -3856,7 +3856,7 @@ async function handleDeleteWord() {
   if (!selected) return;
   const wordObj = wordsByPos[pos];
   const wordLabel = wordObj ? wordObj.word : `posició ${pos}`;
-  const confirmMsg = `Segur que vols eliminar la paraula '${wordLabel}' de la llista? en cercar aquesta paraula aquell dia sortirà com a no present al diccionari.`;
+  const confirmMsg = `Segur que voleu eliminar la paraula «${wordLabel}» de la llista? En cercar aquesta paraula, aquell dia sortirà com a no present al diccionari.`;
   if (!confirm(confirmMsg)) return;
   try {
     const res = await fetch(`${RANKINGS_API}/${selected}/word/${pos}`, {
@@ -4102,7 +4102,7 @@ function renderDialog() {
   root.innerHTML = `
 		<div class="dialog-backdrop">
 			<div class="dialog">
-				<div style="margin-bottom:16px;">Segur que vols esborrar el fitxer?</div>
+        <div style="margin-bottom:16px;">Segur que voleu esborrar el fitxer?</div>
 				<div style="display:flex;justify-content:flex-end;gap:8px;">
 					<button class="button" id="cancel-del">Cancel·la</button>
 					<button class="button warning" id="confirm-del">Esborra</button>
@@ -4337,7 +4337,7 @@ async function promptAddNewWord() {
     );
     if (r.ok) lemmaInfo = await r.json();
   } catch (_) {}
-  let warning = "Segur que vols afegir '" + word + "'?\n";
+  let warning = "Segur que voleu afegir «" + word + "»?\n";
   if (lemmaInfo) {
     if (!lemmaInfo.is_known) {
       warning +=

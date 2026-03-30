@@ -11,6 +11,8 @@ from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from fastapi import Query  # noqa: E402
+
 
 from fast_ai import fast_ai as run_fast_ai
 
@@ -272,7 +274,7 @@ def require_auth(request: Request):
         return  # no password set -> open
     header = request.headers.get("x-admin-token")
     if not header or header != ADMIN_PASSWORD:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+        raise HTTPException(status_code=401, detail="No autoritzat")
 
 @app.post("/api/cache/clear")
 def clear_core_cache(_: None = Depends(require_auth)):
@@ -306,7 +308,7 @@ def clear_core_cache(_: None = Depends(require_auth)):
 @app.post("/api/auth")
 def auth(req: AuthRequest):
     if not ADMIN_PASSWORD:
-        return {"ok": True, "note": "No password configured"}
+        return {"ok": True, "note": "No s'ha configurat cap contrasenya"}
     if req.password == ADMIN_PASSWORD:
         return {"ok": True}
     raise HTTPException(status_code=401, detail="Contrasenya incorrecta")
@@ -397,7 +399,6 @@ def set_difficulty(filename: str, upd: DifficultyUpdate, _: None = Depends(requi
     _save_difficulties(diffs)
     return {"ok": True, "difficulty": upd.difficulty}
 
-from fastapi import Query  # noqa: E402
 
 
 @app.get("/api/rankings/{filename}")
