@@ -37,17 +37,20 @@ El bon ús de la llengua catalana és una prioritat en el projecte. Tant com la 
 ## Comandes principals
 
 ```bash
+# Entorn virtual (obligatori per a comandes Python)
+venv\Scripts\python.exe -m pip install -r requirements.txt
+
 # Backend — servidor de joc (port 8000 per defecte)
-python server.py
+venv\Scripts\python.exe server.py
 
 # Backend — servidor d'administració (port 5001 per defecte)
-python server_admin.py
+venv\Scripts\python.exe server_admin.py
 
 # Frontend — servidor de desenvolupament (port 3000)
 cd frontend && npm start
 
 # Tests backend
-pytest tests/ -v
+venv\Scripts\python.exe -m pytest tests/ -v
 
 # Tests frontend
 cd frontend && npm test
@@ -56,8 +59,10 @@ cd frontend && npm test
 ruff check .
 
 # Generar rànquing per una paraula (requereix model FastText)
-python generate.py --paraula "casa" --algorisme fasttext
+venv\Scripts\python.exe generate.py --paraula "casa" --algorisme fasttext
 ```
+
+Norma de treball: qualsevol comanda Python al projecte s'ha d'executar des del venv local (`venv\Scripts\python.exe ...`).
 
 ## Convencions de codi
 
