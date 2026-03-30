@@ -115,13 +115,65 @@ def init_db():
             );
             CREATE INDEX IF NOT EXISTS idx_completions_rebuscada ON completions(rebuscada);
             CREATE INDEX IF NOT EXISTS idx_completions_data ON completions(data);
+
+            -- Ús de mode simple per sessió+joc (si algun cop s'activa, queda marcat)
+            CREATE TABLE IF NOT EXISTS game_mode_usage (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT NOT NULL,
+                rebuscada TEXT NOT NULL,
+                game_id INTEGER,
+                simple_mode_used INTEGER NOT NULL DEFAULT 0,
+                data TEXT NOT NULL,
+                timestamp TEXT NOT NULL,
+                UNIQUE(session_id, rebuscada)
+            );
+            CREATE INDEX IF NOT EXISTS idx_game_mode_usage_rebuscada ON game_mode_usage(rebuscada);
+            CREATE INDEX IF NOT EXISTS idx_game_mode_usage_simple ON game_mode_usage(simple_mode_used);
         """)
     logger.info(f"Stats DB initialized at {DB_PATH}")
 
 
 # ==================== FUNCIONS D'ENREGISTRAMENT ====================
 
-def record_visit(session_id: str, rebuscada: str | None = None, game_id: int | None = None):
+def record_game_mode_usage(session_id: str, rebuscada: str, game_id: int | None, simple_mode_used: bool):
+    """Registra (o actualitza) si una sessió ha usat mode simple en un joc.
+
+    Un cop és TRUE, no torna mai a FALSE per aquell (session_id, rebuscada).
+    """
+    now = datetime.now()
+    today = now.strftime("%Y-%m-%d")
+
+    with get_db() as conn:
+        conn.execute(
+            """INSERT INTO game_mode_usage
+               (session_id, rebuscada, game_id, simple_mode_used, data, timestamp)
+               VALUES (?, ?, ?, ?, ?, ?)
+               ON CONFLICT(session_id, rebuscada) DO UPDATE SET
+                 game_id = COALESCE(excluded.game_id, game_mode_usage.game_id),
+                 simple_mode_used = CASE
+                    WHEN game_mode_usage.simple_mode_used = 1 OR excluded.simple_mode_used = 1 THEN 1
+                    ELSE 0
+                 END,
+                 data = excluded.data,
+                 timestamp = excluded.timestamp
+            """,
+            (
+                session_id,
+                rebuscada,
+                game_id,
+                1 if simple_mode_used else 0,
+                today,
+                now.isoformat(),
+            )
+        )
+
+
+def record_visit(
+    session_id: str,
+    rebuscada: str | None = None,
+    game_id: int | None = None,
+    simple_mode_used: bool = False,
+):
     """Registra una visita (accés a la web). Deduplicat per session_id + dia."""
     now = datetime.now()
     today = now.strftime("%Y-%m-%d")
@@ -139,10 +191,13 @@ def record_visit(session_id: str, rebuscada: str | None = None, game_id: int | N
                 (session_id, rebuscada, game_id, today, now.isoformat())
             )
 
+    if rebuscada:
+        record_game_mode_usage(session_id, rebuscada, game_id, simple_mode_used)
+
 
 def record_guess(session_id: str, rebuscada: str, paraula: str,
                  forma_canonica: str | None, posicio: int, es_correcta: bool,
-                 game_id: int | None = None):
+                 game_id: int | None = None, simple_mode_used: bool = False):
     """Registra un intent vàlid."""
     now = datetime.now()
     today = now.strftime("%Y-%m-%d")
@@ -176,9 +231,11 @@ def record_guess(session_id: str, rebuscada: str, paraula: str,
                 (session_id, rebuscada, game_id, num_intents, num_pistes, today, now.isoformat())
             )
 
+    record_game_mode_usage(session_id, rebuscada, game_id, simple_mode_used)
+
 
 def record_hint(session_id: str, rebuscada: str, paraula_pista: str, posicio: int,
-                game_id: int | None = None):
+                game_id: int | None = None, simple_mode_used: bool = False):
     """Registra una pista demanada."""
     now = datetime.now()
     today = now.strftime("%Y-%m-%d")
@@ -191,8 +248,10 @@ def record_hint(session_id: str, rebuscada: str, paraula_pista: str, posicio: in
             (session_id, rebuscada, game_id, paraula_pista, posicio, today, now.isoformat())
         )
 
+    record_game_mode_usage(session_id, rebuscada, game_id, simple_mode_used)
 
-def record_surrender(session_id: str, rebuscada: str, game_id: int | None = None):
+
+def record_surrender(session_id: str, rebuscada: str, game_id: int | None = None, simple_mode_used: bool = False):
     """Registra una rendició."""
     now = datetime.now()
     today = now.strftime("%Y-%m-%d")
@@ -204,6 +263,8 @@ def record_surrender(session_id: str, rebuscada: str, game_id: int | None = None
                VALUES (?, ?, ?, ?, ?)""",
             (session_id, rebuscada, game_id, today, now.isoformat())
         )
+
+    record_game_mode_usage(session_id, rebuscada, game_id, simple_mode_used)
 
 
 # ==================== FUNCIONS DE CONSULTA ====================
@@ -271,6 +332,16 @@ def get_overview_stats() -> dict[str, Any]:
             "SELECT COUNT(*) FROM hints"
         ).fetchone()[0]
 
+        players_used_simple_mode = conn.execute(
+            """SELECT COUNT(DISTINCT CASE WHEN session_id LIKE 'anon-%' THEN '__anon__' ELSE session_id END)
+               FROM game_mode_usage
+               WHERE simple_mode_used = 1"""
+        ).fetchone()[0]
+
+        games_used_simple_mode = conn.execute(
+            "SELECT COUNT(DISTINCT rebuscada) FROM game_mode_usage WHERE simple_mode_used = 1"
+        ).fetchone()[0]
+
         return {
             "total_visits": total_visits or 0,
             "visits_today": visits_today or 0,
@@ -282,6 +353,8 @@ def get_overview_stats() -> dict[str, Any]:
             "total_surrenders": total_surrenders or 0,
             "avg_intents_per_completion": round(avg_intents, 1) if avg_intents else 0,
             "total_hints": total_hints or 0,
+            "players_used_simple_mode": players_used_simple_mode or 0,
+            "games_used_simple_mode": games_used_simple_mode or 0,
         }
 
 
@@ -340,6 +413,8 @@ def get_per_game_stats() -> list[dict[str, Any]]:
                 COALESCE(c.completions, 0) as completions,
                 COALESCE(s.surrenders, 0) as surrenders,
                 COALESCE(h.hints, 0) as hints,
+                COALESCE(sm.simple_mode_players, 0) as simple_mode_players,
+                ROUND(CAST(COALESCE(sm.simple_mode_players, 0) AS FLOAT) / NULLIF(COUNT(DISTINCT CASE WHEN g.session_id LIKE 'anon-%' THEN '__anon__' ELSE g.session_id END), 0) * 100, 1) as simple_mode_rate,
                 COALESCE(c.avg_intents, 0) as avg_intents,
                 ROUND(CAST(COALESCE(c.completions, 0) AS FLOAT) / NULLIF(COUNT(DISTINCT CASE WHEN g.session_id LIKE 'anon-%' THEN '__anon__' ELSE g.session_id END), 0) * 100, 1) as completion_rate
             FROM guesses g
@@ -355,6 +430,12 @@ def get_per_game_stats() -> list[dict[str, Any]]:
                 SELECT rebuscada, COUNT(*) as hints
                 FROM hints GROUP BY rebuscada
             ) h ON g.rebuscada = h.rebuscada
+            LEFT JOIN (
+                SELECT rebuscada, COUNT(DISTINCT CASE WHEN session_id LIKE 'anon-%' THEN '__anon__' ELSE session_id END) as simple_mode_players
+                FROM game_mode_usage
+                WHERE simple_mode_used = 1
+                GROUP BY rebuscada
+            ) sm ON g.rebuscada = sm.rebuscada
             GROUP BY g.rebuscada
             ORDER BY g.game_id DESC NULLS LAST, g.rebuscada
         """).fetchall()
@@ -393,7 +474,8 @@ def get_players_for_game(rebuscada: str) -> list[dict[str, Any]]:
                 MIN(g.timestamp) as primer_intent,
                 MAX(g.timestamp) as ultim_intent,
                 COALESCE(SUM(h.num_pistes), 0) as num_pistes,
-                MAX(COALESCE(sr.rendicio, 0)) as es_rendicio
+                MAX(COALESCE(sr.rendicio, 0)) as es_rendicio,
+                MAX(COALESCE(sm.simple_mode_used, 0)) as simple_mode_used
             FROM guesses g
             LEFT JOIN (
                 SELECT session_id, rebuscada, COUNT(*) as num_pistes
@@ -404,10 +486,15 @@ def get_players_for_game(rebuscada: str) -> list[dict[str, Any]]:
                 SELECT session_id, rebuscada, 1 as rendicio
                 FROM surrenders WHERE rebuscada = ?
             ) sr ON g.session_id = sr.session_id AND sr.rebuscada = g.rebuscada
+            LEFT JOIN (
+                SELECT session_id, rebuscada, simple_mode_used
+                FROM game_mode_usage
+                WHERE rebuscada = ?
+            ) sm ON g.session_id = sm.session_id AND sm.rebuscada = g.rebuscada
             WHERE g.rebuscada = ?
             GROUP BY CASE WHEN g.session_id LIKE 'anon-%' THEN '__anon__' ELSE g.session_id END
             ORDER BY MIN(g.timestamp)
-        """, (rebuscada, rebuscada, rebuscada)).fetchall()
+        """, (rebuscada, rebuscada, rebuscada, rebuscada)).fetchall()
 
         result = []
         player_num = 0

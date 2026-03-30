@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import uuid
+import random
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
@@ -27,6 +28,8 @@ class GuessRequest(BaseModel):
     comp_id: str | None = None  # ID de competició opcional
     nom_jugador: str | None = None  # Nom del jugador en competició
     es_personalitzada: bool | None = False  # Si és True, no valida disponibilitat del joc
+    mode: str | None = None  # Mode opcional ('simple' o 'expert')
+    simple_mode_used: bool | None = False  # Si en algun moment s'ha activat el mode simple
 
 class GuessResponse(BaseModel):
     paraula: str
@@ -45,6 +48,7 @@ class PistaRequest(BaseModel):
     comp_id: str | None = None  # ID de competició opcional
     nom_jugador: str | None = None  # Nom del jugador en competició
     es_personalitzada: bool | None = False  # Si és True, no valida disponibilitat del joc
+    simple_mode_used: bool | None = False  # Si en algun moment s'ha activat el mode simple
 
 class PistaResponse(BaseModel):
     paraula: str
@@ -57,9 +61,15 @@ class RendirseRequest(BaseModel):
     comp_id: str | None = None  # ID de competició opcional
     nom_jugador: str | None = None  # Nom del jugador en competició
     es_personalitzada: bool | None = False  # Si és True, no valida disponibilitat del joc
+    simple_mode_used: bool | None = False  # Si en algun moment s'ha activat el mode simple
 
 class RendirseResponse(BaseModel):
     paraula_correcta: str
+class ProposedWordsResponse(BaseModel):
+    paraules: list[str]
+    rebuscada: str
+    total_paraules: int
+
 
 class RankingItem(BaseModel):
     paraula: str
@@ -141,7 +151,7 @@ async def startup_event():
 
 # Configurar CORS
 # En producció només permetre rebuscada.cat, en desenvolupament també localhost
-ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "https://rebuscada.cat, https://www.rebuscada.cat, http://localhost:3000").split(",")
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "https://rebuscada.cat,https://www.rebuscada.cat,http://localhost:3000").split(",")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
@@ -348,6 +358,91 @@ def obtenir_ranking_actiu(rebuscada_request: str | None = None, es_personalitzad
         logger.error(f"Error carregant el rànquing per la paraula '{rebuscada}': {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@lru_cache(maxsize=CACHE_MAX_SIZE)
+def carregar_buckets_propostes(rebuscada: str) -> dict[str, tuple[str, ...]]:
+    """Precalcula buckets de paraules per intervals de posició per una rebuscada.
+
+    Es calcula una vegada per rebuscada i queda cachejat per reutilitzar-se en totes
+    les crides de /proposed-words.
+    """
+    ranking_diccionari, _, _ = carregar_ranking(rebuscada)
+
+    buckets: dict[str, list[str]] = {
+        'very_close': [],  # < 100
+        'close': [],       # 100-200
+        'medium': [],      # 200-300
+        'far': [],         # 300-600
+        'very_far': []     # >= 600
+    }
+
+    for word, pos in ranking_diccionari.items():
+        if pos == 0:
+            continue
+        if pos < 100:
+            buckets['very_close'].append(word)
+        elif pos < 200:
+            buckets['close'].append(word)
+        elif pos < 300:
+            buckets['medium'].append(word)
+        elif pos < 600:
+            buckets['far'].append(word)
+        else:
+            buckets['very_far'].append(word)
+
+    # Tuples immutables per evitar còpies accidentals i millorar la reutilització de cache.
+    return {k: tuple(v) for k, v in buckets.items()}
+
+
+def _pick_random_words(pool: tuple[str, ...], count: int, blocked: set[str]) -> list[str]:
+    """Selecciona paraules úniques d'un pool evitant les de blocked.
+
+    Estratègia híbrida:
+    - Pools petits: filtra i fa sample (simple i barat)
+    - Pools grans: random.choice amb retries + fallback lineal curt
+    """
+    if count <= 0 or not pool:
+        return []
+
+    selected: list[str] = []
+
+    # En pools petits és més eficient filtrar una sola vegada.
+    if len(pool) <= 200:
+        disponibles = [w for w in pool if w not in blocked]
+        if not disponibles:
+            return []
+        if len(disponibles) <= count:
+            selected = disponibles
+        else:
+            selected = random.sample(disponibles, count)
+        blocked.update(selected)
+        return selected
+
+    # En pools grans evitem crear llistes filtrades completes a cada crida.
+    target = count
+    max_attempts = max(200, target * 40)
+    attempts = 0
+
+    while len(selected) < target and attempts < max_attempts:
+        attempts += 1
+        candidate = random.choice(pool)
+        if candidate in blocked:
+            continue
+        blocked.add(candidate)
+        selected.append(candidate)
+
+    # Fallback final per completar en cas d'alta col·lisió amb blocked.
+    if len(selected) < target:
+        for candidate in pool:
+            if candidate in blocked:
+                continue
+            blocked.add(candidate)
+            selected.append(candidate)
+            if len(selected) >= target:
+                break
+
+    return selected
+
 @app.post("/internal/cache/clear")
 async def internal_cache_clear(request: Request):
     """Endpoint intern per netejar la memòria cau LRU.
@@ -369,6 +464,7 @@ async def internal_cache_clear(request: Request):
         # Llista de funcions cachejades a netejar
         lru_funcs = [
             ("carregar_ranking", carregar_ranking),
+            ("carregar_buckets_propostes", carregar_buckets_propostes),
         ]
 
         for name, func in lru_funcs:
@@ -447,7 +543,8 @@ async def guess(request: GuessRequest, raw_request: Request):
                     forma_canonica=None,
                     posicio=rank_directe,
                     es_correcta=es_correcta_directe,
-                    game_id=obtenir_game_id(request.rebuscada or DEFAULT_REBUSCADA)
+                    game_id=obtenir_game_id(request.rebuscada or DEFAULT_REBUSCADA),
+                    simple_mode_used=bool(request.simple_mode_used)
                 )
             except Exception as e:
                 logger.warning(f"Error registrant estadística de guess directe: {e}")
@@ -507,7 +604,8 @@ async def guess(request: GuessRequest, raw_request: Request):
             forma_canonica=forma_canonica if es_flexio else None,
             posicio=rank,
             es_correcta=es_correcta,
-            game_id=obtenir_game_id(request.rebuscada or DEFAULT_REBUSCADA)
+            game_id=obtenir_game_id(request.rebuscada or DEFAULT_REBUSCADA),
+            simple_mode_used=bool(request.simple_mode_used)
         )
     except Exception as e:
         logger.warning(f"Error registrant estadística de guess: {e}")
@@ -519,6 +617,86 @@ async def guess(request: GuessRequest, raw_request: Request):
         total_paraules=total_paraules,
         es_correcta=es_correcta
     )
+
+def generate_proposed_words(rebuscada: str, exclude_words: list[str] | None = None) -> list[str]:
+    """Genera 10 paraules proposades estratègicament distribuïdes per intervals de position.
+    
+    La distribució és:
+    - 1 paraula amb posició < 100 (molt propera)
+    - 1 paraula amb posició 100-200 (prou propera)
+    - 1 paraula amb posició 200-300 (una mica propera)
+    - 1 paraula amb posició 300-600 (no molt llunyana)
+    - 6 paraules amb posició >= 600 (llunyanes)
+    
+    Mai inclou la paraula correcta (posició 0).
+    Exclou les paraules especificades en exclude_words.
+    """
+    if exclude_words is None:
+        exclude_words = []
+
+    blocked = {w.lower().strip() for w in exclude_words if w}
+
+    try:
+        intervals = carregar_buckets_propostes(rebuscada)
+    except Exception:
+        return []
+
+    proposed: list[str] = []
+
+    # Distribució principal estratègica
+    proposed.extend(_pick_random_words(intervals['very_close'], 1, blocked))
+    proposed.extend(_pick_random_words(intervals['close'], 1, blocked))
+    proposed.extend(_pick_random_words(intervals['medium'], 1, blocked))
+    proposed.extend(_pick_random_words(intervals['far'], 1, blocked))
+    proposed.extend(_pick_random_words(intervals['very_far'], 6, blocked))
+
+    # Completar fins a 10 aprofitant el que quedi en qualsevol interval.
+    if len(proposed) < 10:
+        missing = 10 - len(proposed)
+        for key in ('very_close', 'close', 'medium', 'far', 'very_far'):
+            if missing <= 0:
+                break
+            extra = _pick_random_words(intervals[key], missing, blocked)
+            proposed.extend(extra)
+            missing = 10 - len(proposed)
+
+    random.shuffle(proposed)
+    return proposed[:10]
+
+
+@app.get("/proposed-words", response_model=ProposedWordsResponse)
+async def get_proposed_words(rebuscada: str | None = None, exclude: str | None = None):
+    """Retorna 10 paraules proposades estratègicament distribuïdes per intervals de posició.
+    
+    Parameters
+    ----------
+    rebuscada: Optional[str]
+        Paraula per la qual es volen paraules proposades (opcional, usa la paraula del dia per defecte)
+    exclude: Optional[str]
+        Llista de paraules separades per comes per excloure de les propostes
+    """
+    try:
+        # Parse exclude list
+        exclude_words = []
+        if exclude:
+            exclude_words = [w.strip().lower() for w in exclude.split(',') if w.strip()]
+        
+        # Get the ranking
+        ranking_diccionari, total_paraules, paraula_objectiu = obtenir_ranking_actiu(rebuscada)
+        
+        # Generate proposed words
+        proposed = generate_proposed_words(rebuscada or DEFAULT_REBUSCADA, exclude_words)
+        
+        return ProposedWordsResponse(
+            paraules=proposed,
+            rebuscada=rebuscada or DEFAULT_REBUSCADA,
+            total_paraules=total_paraules
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error generant paraules proposades: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error generant paraules proposades: {str(e)}")
 
 @app.post("/pista", response_model=PistaResponse)
 async def donar_pista(request: PistaRequest, raw_request: Request):
@@ -628,7 +806,8 @@ async def donar_pista(request: PistaRequest, raw_request: Request):
             rebuscada=request.rebuscada or DEFAULT_REBUSCADA,
             paraula_pista=paraula_pista,
             posicio=ranking_diccionari[paraula_pista],
-            game_id=obtenir_game_id(request.rebuscada or DEFAULT_REBUSCADA)
+            game_id=obtenir_game_id(request.rebuscada or DEFAULT_REBUSCADA),
+            simple_mode_used=bool(request.simple_mode_used)
         )
     except Exception as e:
         logger.warning(f"Error registrant estadística de pista: {e}")
@@ -1096,7 +1275,8 @@ async def register_visit(request: Request):
         body = await request.json()
         rebuscada = body.get("rebuscada")
         game_id = body.get("game_id")
-        game_stats.record_visit(session_id, rebuscada, game_id)
+        simple_mode_used = bool(body.get("simple_mode_used", False))
+        game_stats.record_visit(session_id, rebuscada, game_id, simple_mode_used)
         return {"ok": True}
     except Exception as e:
         logger.warning(f"Error registrant visita: {e}")
@@ -1256,7 +1436,8 @@ async def rendirse(request: RendirseRequest, raw_request: Request):
             game_stats.record_surrender(
                 session_id=session_id,
                 rebuscada=request.rebuscada or DEFAULT_REBUSCADA,
-                game_id=obtenir_game_id(request.rebuscada or DEFAULT_REBUSCADA)
+                game_id=obtenir_game_id(request.rebuscada or DEFAULT_REBUSCADA),
+                simple_mode_used=bool(request.simple_mode_used)
             )
         except Exception as e:
             logger.warning(f"Error registrant estadística de rendició: {e}")

@@ -12,8 +12,6 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from fastapi import Query  # noqa: E402
-
-
 from fast_ai import fast_ai as run_fast_ai
 
 load_dotenv()
