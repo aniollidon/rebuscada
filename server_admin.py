@@ -798,18 +798,18 @@ def search_words(filename: str, query: str, is_regex: bool = False, _: None = De
 
 @app.get("/api/rankings/{filename}/test-words")
 def ranking_test_words(filename: str, _: None = Depends(require_auth)):
-    """Retorna les paraules de data/test.json amb la seva posició (o no trobada)."""
+    """Retorna les paraules de data/comu.json amb la seva posició (o no trobada)."""
     file_path = WORDS_DIR / filename
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Fitxer no trobat.")
-    test_path = Path(__file__).parent / "data" / "test.json"
+    test_path = Path(__file__).parent / "data" / "comu.json"
     if not test_path.exists():
-        raise HTTPException(status_code=404, detail="test.json no trobat")
+        raise HTTPException(status_code=404, detail="comu.json no trobat")
     try:
         with open(test_path, encoding="utf-8") as f:
             test_words = json.load(f)
     except Exception:
-        raise HTTPException(status_code=500, detail="No s'ha pogut llegir test.json")
+        raise HTTPException(status_code=500, detail="No s'ha pogut llegir comu.json")
     with open(file_path, encoding="utf-8") as f:
         ranking = json.load(f)  # dict word->pos
     out = []
@@ -1061,8 +1061,8 @@ def ranking_test_words_synonyms_custom(filename: str, word: str, _: None = Depen
 
 @app.post("/api/test-words")
 def add_test_words(req: AddTestWordsRequest, _: None = Depends(require_auth)):
-    """Afegeix paraules al fitxer data/test.json (evitant duplicats). Accepta 'word' o 'words'."""
-    test_path = Path(__file__).parent / "data" / "test.json"
+    """Afegeix paraules al fitxer data/comu.json (evitant duplicats). Accepta 'word' o 'words'."""
+    test_path = Path(__file__).parent / "data" / "comu.json"
     if test_path.exists():
         try:
             with open(test_path, encoding="utf-8") as f:
@@ -1099,22 +1099,22 @@ def add_test_words(req: AddTestWordsRequest, _: None = Depends(require_auth)):
         with open(test_path, 'w', encoding='utf-8') as f:
             json.dump(current, f, ensure_ascii=False, indent=2)
     except Exception:
-        raise HTTPException(status_code=500, detail="No s'ha pogut desar test.json")
+        raise HTTPException(status_code=500, detail="No s'ha pogut desar comu.json")
     return {"ok": True, "added": added, "total": len(current)}
 
 @app.post("/api/test-words/delete")
 def delete_test_words(req: DeleteTestWordsRequest, _: None = Depends(require_auth)):
-    """Elimina paraules de data/test.json (ignora les que no existeixin)."""
-    test_path = Path(__file__).parent / "data" / "test.json"
+    """Elimina paraules de data/comu.json (ignora les que no existeixin)."""
+    test_path = Path(__file__).parent / "data" / "comu.json"
     if not test_path.exists():
-        raise HTTPException(status_code=404, detail="test.json no trobat")
+        raise HTTPException(status_code=404, detail="comu.json no trobat")
     try:
         with open(test_path, encoding="utf-8") as f:
             current = json.load(f)
         if not isinstance(current, list):
             raise Exception()
     except Exception:
-        raise HTTPException(status_code=500, detail="Format test.json invàlid")
+        raise HTTPException(status_code=500, detail="Format comu.json invàlid")
     target = {w.strip().lower() for w in req.words if isinstance(w, str)}
     if not target:
         raise HTTPException(status_code=400, detail="Cap paraula a eliminar")
@@ -1130,7 +1130,7 @@ def delete_test_words(req: DeleteTestWordsRequest, _: None = Depends(require_aut
         with open(test_path, 'w', encoding='utf-8') as f:
             json.dump(new_list, f, ensure_ascii=False, indent=2)
     except Exception:
-        raise HTTPException(status_code=500, detail="No s'ha pogut desar test.json")
+        raise HTTPException(status_code=500, detail="No s'ha pogut desar comu.json")
     return {"ok": True, "removed": removed, "total": len(new_list)}
 
 @app.delete("/api/rankings/{filename}/word/{pos}")

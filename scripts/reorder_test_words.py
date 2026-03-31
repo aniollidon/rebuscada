@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-FILE = Path(__file__).resolve().parents[1] / 'data' / 'test.json'
+FILE = Path(__file__).resolve().parents[1] / 'data' / 'comu.json'
 PREFIX = [
     'casa','aigua','cotxe','llum','gos','porta','taula','ordinador','llibre','mà','ull','terra','cel','foc','vent','pluja','sol','lluna','estrella','menjar','pa','vi','peix','arbre','flor','herba','pedra','muntanya','mar','riu','barca','amic','família','escola','treball','diners','ciutat','poble','camí','pont','carretera','avió','tren','vaixell','rellotge','joc','música','cant','somni','idea','temps','vida','mort'
 ]

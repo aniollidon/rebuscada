@@ -4479,15 +4479,20 @@ function renderStatsContent(
       </div></div>
     </div>
     <div class="row g-3 mb-4">
-      <div class="col-md-4"><div class="stats-card stats-card-teal">
+      <div class="col-md-3"><div class="stats-card stats-card-teal">
         <div class="stats-card-number">${overview.avg_intents_per_completion}</div>
         <div class="stats-card-label">Mitjana d'intents per completar</div>
       </div></div>
-      <div class="col-md-4"><div class="stats-card stats-card-pink">
+      <div class="col-md-3"><div class="stats-card stats-card-pink">
         <div class="stats-card-number">${overview.total_hints}</div>
         <div class="stats-card-label">Pistes demanades (total)</div>
       </div></div>
-      <div class="col-md-4"><div class="stats-card stats-card-gray">
+      <div class="col-md-3"><div class="stats-card stats-card-blue">
+        <div class="stats-card-number">${overview.players_used_simple_mode || 0}</div>
+        <div class="stats-card-label">Jugadors que han usat SIMPLE</div>
+        <div class="stats-card-sub">${overview.games_used_simple_mode || 0} jocs amb SIMPLE</div>
+      </div></div>
+      <div class="col-md-3"><div class="stats-card stats-card-gray">
         <div class="stats-card-number">${pct(overview.total_completions, overview.total_completions + overview.total_surrenders)}%</div>
         <div class="stats-card-label">Taxa de completació</div>
         <div class="stats-card-sub">(completats vs completats+rendicions)</div>
@@ -4525,6 +4530,8 @@ function renderStatsContent(
                   <th class="text-center">Completats</th>
                   <th class="text-center">Rendicions</th>
                   <th class="text-center">Pistes</th>
+                  <th class="text-center">Jugadors SIMPLE</th>
+                  <th class="text-center">% SIMPLE</th>
                   <th class="text-center">Avg intents</th>
                   <th class="text-center">% Completació</th>
                   <th></th>
@@ -4533,7 +4540,7 @@ function renderStatsContent(
               <tbody>
                 ${
                   perGame.length === 0
-                    ? '<tr><td colspan="9" class="text-muted text-center">Encara no hi ha dades</td></tr>'
+                    ? '<tr><td colspan="11" class="text-muted text-center">Encara no hi ha dades</td></tr>'
                     : perGame
                         .map(
                           (g) => `
@@ -4544,6 +4551,8 @@ function renderStatsContent(
                       <td class="text-center"><span class="badge bg-success">${g.completions}</span></td>
                       <td class="text-center"><span class="badge bg-danger">${g.surrenders}</span></td>
                       <td class="text-center">${g.hints}</td>
+                      <td class="text-center">${g.simple_mode_players || 0}</td>
+                      <td class="text-center">${g.simple_mode_rate ? g.simple_mode_rate + "%" : "0%"}</td>
                       <td class="text-center">${g.avg_intents ? Math.round(g.avg_intents * 10) / 10 : "-"}</td>
                       <td class="text-center">${g.completion_rate ? g.completion_rate + "%" : "-"}</td>
                       <td><button class="btn btn-outline-primary btn-sm py-0 px-1" onclick="loadWordsForGame('${g.rebuscada}')" title="Veure paraules jugades"><i class="bi bi-eye"></i></button></td>
@@ -4852,7 +4861,8 @@ async function loadPlayersForGame(rebuscada) {
       const dayPlayers = grouped[dayKey] || [];
       const completed = dayPlayers.filter((p) => p.ha_completat).length;
       const surrendered = dayPlayers.filter((p) => p.es_rendicio).length;
-      summarySpan.innerHTML = `<span class="badge bg-success">${completed} <i class="bi bi-check-circle"></i></span> <span class="badge bg-danger">${surrendered} <i class="bi bi-x-circle"></i></span> <span class="badge bg-secondary">${dayPlayers.length - completed - surrendered} <i class="bi bi-hourglass-split"></i></span>`;
+      const simpleUsers = dayPlayers.filter((p) => p.simple_mode_used).length;
+      summarySpan.innerHTML = `<span class="badge bg-success">${completed} <i class="bi bi-check-circle"></i></span> <span class="badge bg-danger">${surrendered} <i class="bi bi-x-circle"></i></span> <span class="badge bg-secondary">${dayPlayers.length - completed - surrendered} <i class="bi bi-hourglass-split"></i></span> <span class="badge bg-info text-dark" title="Han usat el mode simple en aquest joc">SIMPLE ${simpleUsers}</span>`;
 
       playersDiv.innerHTML = dayPlayers
         .map((p) => {
@@ -4866,12 +4876,14 @@ async function loadPlayersForGame(rebuscada) {
             : p.es_rendicio
               ? "x-circle"
               : "hourglass-split";
+          const simpleBadge = p.simple_mode_used ? '<span class="badge bg-info text-dark ms-1" title="Mode simple utilitzat">S</span>' : "";
           return `<button class="btn btn-sm btn-outline-secondary player-session-btn" 
             data-session="${p.session_id}" data-rebuscada="${rebuscada}"
-            title="${p.short_id} — ${p.num_intents} intents, ${p.num_pistes} pistes">
+            title="${p.short_id} — ${p.num_intents} intents, ${p.num_pistes} pistes${p.simple_mode_used ? ', mode simple' : ''}">
             <i class="bi bi-${icon} text-${p.ha_completat ? "success" : p.es_rendicio ? "danger" : "warning"}"></i>
             ${p.label}
             <span class="badge ${badge} ms-1">${p.num_intents}</span>
+            ${simpleBadge}
           </button>`;
         })
         .join("");

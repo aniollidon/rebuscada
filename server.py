@@ -67,6 +67,7 @@ class RendirseResponse(BaseModel):
     paraula_correcta: str
 class ProposedWordsResponse(BaseModel):
     paraules: list[str]
+    top100_paraules: list[str] = []
     rebuscada: str
     total_paraules: int
 
@@ -236,8 +237,33 @@ if os.path.exists(EXCLUSIONS_PATH):
         exclusions_data = json.load(f)
         exclusions_set = set(Diccionari.normalitzar_paraula(w) for w in exclusions_data.get("lemmas", []))
 
+# Carregar llista de paraules comunes
+COMU_PATH = os.path.join("data", "comu.json")
+comu_set: set[str] = set()
+if os.path.exists(COMU_PATH):
+    with open(COMU_PATH, encoding="utf-8") as f:
+        comu_data = json.load(f)
+        comu_set = set(Diccionari.normalitzar_paraula(w) for w in comu_data)
+
 # Cache per emmagatzemar fins a 10 rànquings carregats (evita recarregar constantment)
 CACHE_MAX_SIZE = int(os.getenv("RANKING_CACHE_SIZE", "10"))
+
+# Probabilitats de franges per a propostes en mode SIMPLE
+PROPOSED_INTERVAL_WEIGHTS: tuple[tuple[str, int], ...] = (
+    ("very_close", 10),  # <100
+    ("close", 10),       # 100-200
+    ("medium", 10),      # 200-300
+    ("far", 60),         # 5000-14999
+    ("very_far", 10),    # >=15000
+)
+
+# Probabilitats de freqüència dins de cada franja
+PROPOSED_FREQ_WEIGHTS: tuple[tuple[str, int], ...] = (
+    ("common_list", 50),  # al llistat comu.json
+    ("very_common", 15),  # freq > 2000
+    ("common", 33),       # freq > 400 (inclou very_common)
+    ("free", 2),          # qualsevol
+)
 
 def is_catalan(word: str) -> bool:
     """Retorna false si hi ha un caràcter no alfabètic (català, accepta accents, ç, dièresis, punt volat i guionet)
@@ -360,38 +386,170 @@ def obtenir_ranking_actiu(rebuscada_request: str | None = None, es_personalitzad
 
 
 @lru_cache(maxsize=CACHE_MAX_SIZE)
-def carregar_buckets_propostes(rebuscada: str) -> dict[str, tuple[str, ...]]:
-    """Precalcula buckets de paraules per intervals de posició per una rebuscada.
+def carregar_buckets_propostes(rebuscada: str) -> dict[str, dict[str, tuple[str, ...]]]:
+    """Precalcula buckets de paraules per franja i freqüència per una rebuscada.
 
     Es calcula una vegada per rebuscada i queda cachejat per reutilitzar-se en totes
     les crides de /proposed-words.
     """
     ranking_diccionari, _, _ = carregar_ranking(rebuscada)
 
-    buckets: dict[str, list[str]] = {
-        'very_close': [],  # < 100
-        'close': [],       # 100-200
-        'medium': [],      # 200-300
-        'far': [],         # 300-600
-        'very_far': []     # >= 600
+    buckets: dict[str, dict[str, list[str]]] = {
+        "very_close": {"all": [], "common": [], "very_common": [], "common_list": []},
+        "close": {"all": [], "common": [], "very_common": [], "common_list": []},
+        "medium": {"all": [], "common": [], "very_common": [], "common_list": []},
+        "far": {"all": [], "common": [], "very_common": [], "common_list": []},
+        "very_far": {"all": [], "common": [], "very_common": [], "common_list": []},
     }
 
     for word, pos in ranking_diccionari.items():
+        # Mai incloure la paraula correcta (posició 0)
         if pos == 0:
             continue
+
         if pos < 100:
-            buckets['very_close'].append(word)
+            interval_key = "very_close"
         elif pos < 200:
-            buckets['close'].append(word)
+            interval_key = "close"
         elif pos < 300:
-            buckets['medium'].append(word)
-        elif pos < 600:
-            buckets['far'].append(word)
+            interval_key = "medium"
+        elif pos < 15000 and pos >= 5000:
+            interval_key = "far"
+        elif pos >= 15000:
+            interval_key = "very_far"
         else:
-            buckets['very_far'].append(word)
+            # Ignorar franges no incloses en el model actual (300-4999)
+            continue
+
+        bucket = buckets[interval_key]
+        bucket["all"].append(word)
+
+        freq = dicc.freq_lema(word)
+        if freq > 400:
+            bucket["common"].append(word)
+        if freq > 2000:
+            bucket["very_common"].append(word)
+        if word in comu_set:
+            bucket["common_list"].append(word)
 
     # Tuples immutables per evitar còpies accidentals i millorar la reutilització de cache.
-    return {k: tuple(v) for k, v in buckets.items()}
+    return {
+        interval: {
+            "all": tuple(values["all"]),
+            "common": tuple(values["common"]),
+            "very_common": tuple(values["very_common"]),
+            "common_list": tuple(values["common_list"]),
+        }
+        for interval, values in buckets.items()
+    }
+
+
+def _weighted_choice(options: list[tuple[str, int]]) -> str | None:
+    """Retorna una clau aleatòria segons pesos enters positius."""
+    valid = [(key, weight) for key, weight in options if weight > 0]
+    if not valid:
+        return None
+    keys = [k for k, _ in valid]
+    weights = [w for _, w in valid]
+    return random.choices(keys, weights=weights, k=1)[0]
+
+
+def _pool_has_available(pool: tuple[str, ...], blocked: set[str]) -> bool:
+    """Comprova si hi ha almenys una paraula no bloquejada al pool."""
+    for word in pool:
+        if word not in blocked:
+            return True
+    return False
+
+
+def _pick_random_word(pool: tuple[str, ...], blocked: set[str]) -> str | None:
+    """Extreu una paraula aleatòria no bloquejada i la marca com usada."""
+    picked = _pick_random_words(pool, 1, blocked)
+    return picked[0] if picked else None
+
+
+def _pick_probabilistic_word(
+    interval_buckets: dict[str, dict[str, tuple[str, ...]]],
+    blocked: set[str],
+) -> str | None:
+    """Selecciona una paraula seguint el model probabilístic de franja+freqüència."""
+    available_intervals: list[tuple[str, int]] = []
+    for interval_key, interval_weight in PROPOSED_INTERVAL_WEIGHTS:
+        all_pool = interval_buckets[interval_key]["all"]
+        if _pool_has_available(all_pool, blocked):
+            available_intervals.append((interval_key, interval_weight))
+
+    chosen_interval = _weighted_choice(available_intervals)
+    if chosen_interval is None:
+        return None
+
+    chosen_freq_tier = _weighted_choice(list(PROPOSED_FREQ_WEIGHTS))
+    buckets = interval_buckets[chosen_interval]
+
+    # Segon pas: freqüència dins la franja amb fallback en cascada:
+    # common_list -> very_common -> common -> free (all)
+    if chosen_freq_tier == "common_list":
+        candidate = _pick_random_word(buckets["common_list"], blocked)
+        if candidate is not None:
+            return candidate
+        candidate = _pick_random_word(buckets["very_common"], blocked)
+        if candidate is not None:
+            return candidate
+        candidate = _pick_random_word(buckets["common"], blocked)
+        if candidate is not None:
+            return candidate
+    elif chosen_freq_tier == "very_common":
+        candidate = _pick_random_word(buckets["very_common"], blocked)
+        if candidate is not None:
+            return candidate
+        candidate = _pick_random_word(buckets["common"], blocked)
+        if candidate is not None:
+            return candidate
+    elif chosen_freq_tier == "common":
+        candidate = _pick_random_word(buckets["common"], blocked)
+        if candidate is not None:
+            return candidate
+
+    return _pick_random_word(buckets["all"], blocked)
+
+
+def _ensure_top100_word(
+    proposed: list[str],
+    interval_buckets: dict[str, dict[str, tuple[str, ...]]],
+    blocked: set[str],
+) -> list[str]:
+    """Assegura que hi hagi almenys una paraula del top100 (posició 1..99).
+
+    Si no n'hi ha cap i existeix candidat disponible, substitueix preferentment una
+    paraula de la franja molt llunyana per minimitzar l'impacte en la distribució.
+    """
+    very_close_pool = interval_buckets["very_close"]["all"]
+
+    # Si ja n'hi ha alguna del top100, no cal tocar res.
+    if any(word in very_close_pool for word in proposed):
+        return proposed
+
+    top100_candidate = _pick_random_word(very_close_pool, blocked)
+    if top100_candidate is None:
+        return proposed
+
+    # Substituir preferentment una paraula llunyana.
+    replacement_index = None
+    very_far_pool = set(interval_buckets["very_far"]["all"])
+    for idx, word in enumerate(proposed):
+        if word in very_far_pool:
+            replacement_index = idx
+            break
+
+    if replacement_index is None and proposed:
+        replacement_index = len(proposed) - 1
+
+    if replacement_index is not None:
+        old_word = proposed[replacement_index]
+        proposed[replacement_index] = top100_candidate
+        blocked.discard(old_word)
+
+    return proposed
 
 
 def _pick_random_words(pool: tuple[str, ...], count: int, blocked: set[str]) -> list[str]:
@@ -619,17 +777,22 @@ async def guess(request: GuessRequest, raw_request: Request):
     )
 
 def generate_proposed_words(rebuscada: str, exclude_words: list[str] | None = None) -> list[str]:
-    """Genera 10 paraules proposades estratègicament distribuïdes per intervals de position.
-    
-    La distribució és:
-    - 1 paraula amb posició < 100 (molt propera)
-    - 1 paraula amb posició 100-200 (prou propera)
-    - 1 paraula amb posició 200-300 (una mica propera)
-    - 1 paraula amb posició 300-600 (no molt llunyana)
-    - 6 paraules amb posició >= 600 (llunyanes)
-    
-    Mai inclou la paraula correcta (posició 0).
-    Exclou les paraules especificades en exclude_words.
+    """Genera 10 paraules proposades amb model probabilístic.
+
+    Pas 1 (franja de proximitat):
+    - 10% top100 (posició 1..99)
+    - 10% 100-200
+    - 10% 200-300
+    - 60% 5000-14999
+    - 10% >=15000
+
+    Pas 2 (freqüència dins franja):
+    - 20% molt comuna (freq > 2000)
+    - 50% comuna (freq > 400; inclou molt comunes)
+    - 30% lliure (qualsevol)
+
+    Si no hi ha candidats per "molt comuna" o "comuna", es fa fallback aleatori
+    dins la mateixa franja.
     """
     if exclude_words is None:
         exclude_words = []
@@ -637,31 +800,21 @@ def generate_proposed_words(rebuscada: str, exclude_words: list[str] | None = No
     blocked = {w.lower().strip() for w in exclude_words if w}
 
     try:
-        intervals = carregar_buckets_propostes(rebuscada)
+        interval_buckets = carregar_buckets_propostes(rebuscada)
     except Exception:
         return []
 
     proposed: list[str] = []
 
-    # Distribució principal estratègica
-    proposed.extend(_pick_random_words(intervals['very_close'], 1, blocked))
-    proposed.extend(_pick_random_words(intervals['close'], 1, blocked))
-    proposed.extend(_pick_random_words(intervals['medium'], 1, blocked))
-    proposed.extend(_pick_random_words(intervals['far'], 1, blocked))
-    proposed.extend(_pick_random_words(intervals['very_far'], 6, blocked))
+    for _ in range(10):
+        picked = _pick_probabilistic_word(interval_buckets, blocked)
+        if picked is None:
+            break
+        proposed.append(picked)
 
-    # Completar fins a 10 aprofitant el que quedi en qualsevol interval.
-    if len(proposed) < 10:
-        missing = 10 - len(proposed)
-        for key in ('very_close', 'close', 'medium', 'far', 'very_far'):
-            if missing <= 0:
-                break
-            extra = _pick_random_words(intervals[key], missing, blocked)
-            proposed.extend(extra)
-            missing = 10 - len(proposed)
+    proposed = _ensure_top100_word(proposed, interval_buckets, blocked)
 
-    random.shuffle(proposed)
-    return proposed[:10]
+    return proposed
 
 
 @app.get("/proposed-words", response_model=ProposedWordsResponse)
@@ -686,9 +839,14 @@ async def get_proposed_words(rebuscada: str | None = None, exclude: str | None =
         
         # Generate proposed words
         proposed = generate_proposed_words(rebuscada or DEFAULT_REBUSCADA, exclude_words)
+        top100_paraules = [
+            word for word in proposed
+            if 0 < ranking_diccionari.get(word, 10**9) < 100
+        ]
         
         return ProposedWordsResponse(
             paraules=proposed,
+            top100_paraules=top100_paraules,
             rebuscada=rebuscada or DEFAULT_REBUSCADA,
             total_paraules=total_paraules
         )
